@@ -1,0 +1,762 @@
+<title>Controle da Reunião</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Literata:wght@400;600&display=swap">
+<!--
+  PROTÓTIPO DESCARTÁVEL — Auxílio Reunião / Controle (celular do pastor)
+  Pergunta: como deve ser a tela do celular para um pastor de idade conduzir a reunião?
+  Três variantes na mesma página, trocadas pela barra "Variante" (ou setas ← → do teclado, ou #variante-a/b/c).
+  Nada é salvo. Todas as mídias são desenhos de exemplo. Não é código de produção.
+-->
+<style>
+/* Layout: no computador, celular (400px) à esquerda e TV simulada à direita; no celular, só o Controle em tela cheia. */
+:root {
+  --bg: #e9eef4;
+  --surface: #ffffff;
+  --surface-2: #f3f6fa;
+  --ink: #132030;
+  --muted: #4b596a;
+  --line: #c3cedb;
+  --accent: #1f4d9c;
+  --on-accent: #ffffff;
+  --live: #17803f;
+  --live-bg: #def3e6;
+  --danger: #a8231b;
+  --danger-bg: #fbe4e1;
+  --frame: #1b2633;
+  --pill: #132030;
+  --on-pill: #ffffff;
+
+  /* A TV é uma superfície própria, igual nos dois temas */
+  --tv-black: #000000;
+  --tv-ink: #ffffff;
+  --tv-dim: rgba(255,255,255,.72);
+
+  --font-ui: "Atkinson Hyperlegible", "Segoe UI", Roboto, Arial, sans-serif;
+  --font-verse: "Literata", Georgia, "Times New Roman", serif;
+  --radius: 14px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d131a; --surface: #17212d; --surface-2: #1d2936; --ink: #eef3f8; --muted: #a9b6c4;
+    --line: #2f3e4f; --accent: #8db4ff; --on-accent: #0b1424; --live: #4cc77c; --live-bg: #12321f;
+    --danger: #ff8f84; --danger-bg: #3a1714; --frame: #04070a; --pill: #eef3f8; --on-pill: #0d131a;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d131a; --surface: #17212d; --surface-2: #1d2936; --ink: #eef3f8; --muted: #a9b6c4;
+  --line: #2f3e4f; --accent: #8db4ff; --on-accent: #0b1424; --live: #4cc77c; --live-bg: #12321f;
+  --danger: #ff8f84; --danger-bg: #3a1714; --frame: #04070a; --pill: #eef3f8; --on-pill: #0d131a;
+  color-scheme: dark;
+}
+
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); font-size: 18px; line-height: 1.35; }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+.app {
+  height: 100%;
+  display: grid; grid-template-rows: auto 1fr;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.stage { min-height: 0; display: grid; }
+.phone { position: relative; min-height: 0; height: 100%; overflow: hidden; background: var(--bg); }
+.phone-scroll { height: 100%; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; }
+.side { display: none; }
+
+/* Barra de variantes: no celular fica no topo, no computador flutua embaixo */
+.switcher {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding-block: 6px; font-size: 14px;
+}
+.switcher-pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: var(--pill); color: var(--on-pill); border-radius: 999px; padding: 4px;
+  box-shadow: 0 6px 20px rgba(0,0,0,.25);
+}
+.switcher-pill button { background: transparent; border: 0; color: var(--on-pill); padding: 6px 10px; border-radius: 999px; }
+.switcher-pill .lbl { padding: 0 6px; white-space: nowrap; font-weight: 700; }
+.switcher-pill .x { opacity: .7; }
+
+@media (min-width: 900px) {
+  .app { height: auto; min-height: 100%; padding-block: 28px 96px; grid-template-rows: auto; }
+  .switcher { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(18px + env(safe-area-inset-bottom, 0px)); z-index: 50; padding: 0; }
+  .stage { grid-template-columns: 400px minmax(0, 1fr); gap: 36px; align-items: start; max-width: 1280px; margin: 0 auto; width: 100%; }
+  .phone { height: min(860px, calc(100vh - 140px)); border: 10px solid var(--frame); border-radius: 40px; box-shadow: 0 24px 60px rgba(10,20,35,.25); }
+  .side { display: grid; gap: 16px; min-width: 0; }
+}
+
+/* ---------- Telão (TV simulada) ---------- */
+.tv {
+  container-type: inline-size; position: relative; width: 100%; max-width: 100%;
+  aspect-ratio: 16 / 9; background: var(--tv-black); overflow: hidden; border-radius: 6px;
+}
+.tv-big { border: 12px solid #000; border-radius: 10px; box-shadow: 0 18px 50px rgba(0,0,0,.35); }
+.scene { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; gap: 1.6cqw; padding: 6cqw; color: var(--tv-ink); }
+.scene .k { font-size: 2.4cqw; letter-spacing: .18em; text-transform: uppercase; color: var(--tv-dim); }
+.scene .h { font-size: 7cqw; font-weight: 700; line-height: 1.05; text-wrap: balance; }
+.scene .s { font-size: 3.4cqw; color: var(--tv-dim); }
+.scene .tag { position: absolute; right: 2cqw; bottom: 1.6cqw; font-size: 1.8cqw; color: var(--tv-dim); }
+.scene.espera { background: radial-gradient(120% 90% at 50% 10%, #2a4f86 0%, #0f1d33 70%); }
+.scene.convite { background: linear-gradient(135deg, #5b1a1a 0%, #a3561c 100%); }
+.scene.convite2 { background: linear-gradient(135deg, #0f3d3a 0%, #2f7d5b 100%); }
+.scene.video { background: linear-gradient(160deg, #2b3440, #11161d); }
+.scene.frozen { background: linear-gradient(160deg, #d79a54, #7a4a2a); }
+.scene.frozen .big { font-size: 13cqw; line-height: 1; }
+.scene.preto { background: #000; }
+.scene.preto .s { color: rgba(255,255,255,.22); }
+.scene.preg { background: linear-gradient(160deg, var(--pa), var(--pb)); }
+.scene.verse { background: linear-gradient(180deg, #3d6fa8 0%, #9bb9d6 55%, #e7c79a 100%); gap: 3cqw; }
+.scene.verse .t { font-family: var(--font-verse); font-weight: 600; line-height: 1.28; text-wrap: balance; text-shadow: 0 .3cqw 1.2cqw rgba(0,0,0,.45); }
+.scene.verse .r { font-size: 2.8cqw; font-weight: 700; letter-spacing: .04em; text-shadow: 0 .2cqw .8cqw rgba(0,0,0,.5); }
+
+.side-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.side-head h2 { margin: 0; font-size: 20px; }
+.side-head span { color: var(--muted); font-size: 15px; }
+.estado { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; font-size: 15px; }
+.estado h3 { margin: 0 0 8px; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.estado dl { margin: 0; display: grid; grid-template-columns: max-content minmax(0,1fr); gap: 4px 14px; }
+.estado dt { color: var(--muted); }
+.estado dd { margin: 0; font-weight: 700; min-width: 0; }
+.estado p { margin: 10px 0 0; color: var(--muted); font-size: 14px; }
+
+/* ---------- Peças comuns do Controle ---------- */
+.pad { padding: 14px 14px 18px; display: grid; gap: 14px; }
+.top { display: grid; gap: 2px; }
+.top .nome { font-size: 22px; font-weight: 700; }
+.top .quem { color: var(--muted); font-size: 17px; }
+.eyebrow { font-size: 14px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+
+.btn {
+  min-height: 64px; border-radius: var(--radius); border: 2px solid var(--line);
+  background: var(--surface); padding: 10px 14px; font-size: 19px; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; text-align: center;
+}
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn.danger { border-color: var(--danger); color: var(--danger); background: var(--danger-bg); }
+.btn.live { border-color: var(--live); color: var(--live); background: var(--live-bg); }
+.btn.huge { min-height: 96px; font-size: 26px; }
+.row { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); }
+
+.media { background: var(--surface); border: 2px solid var(--live); border-radius: var(--radius); padding: 12px; display: grid; gap: 10px; }
+.media .what { font-weight: 700; font-size: 18px; display: flex; gap: 8px; align-items: center; }
+.media .sub { color: var(--muted); font-size: 16px; }
+.bar { height: 10px; background: var(--surface-2); border-radius: 99px; overflow: hidden; border: 1px solid var(--line); }
+.bar > i { display: block; height: 100%; background: var(--live); width: 0; }
+.vol { display: grid; grid-template-columns: 64px 1fr 64px; gap: 10px; align-items: center; }
+.vol .segs { display: grid; grid-template-columns: repeat(10, 1fr); gap: 3px; height: 22px; align-items: end; }
+.vol .segs i { background: var(--line); border-radius: 2px; }
+.vol .segs i.on { background: var(--live); }
+.vol .btn { min-height: 56px; font-size: 26px; padding: 0; }
+.vol-lbl { font-size: 14px; color: var(--muted); text-align: center; grid-column: 1 / -1; margin-top: -4px; }
+
+.chip { font-size: 14px; font-weight: 700; padding: 3px 10px; border-radius: 99px; background: var(--live); color: var(--surface); white-space: nowrap; }
+.eq { display: inline-flex; gap: 2px; align-items: end; height: 16px; }
+.eq i { width: 4px; background: currentColor; animation: eq 0.9s infinite ease-in-out; }
+.eq i:nth-child(2) { animation-delay: .2s } .eq i:nth-child(3) { animation-delay: .4s }
+@keyframes eq { 0%,100% { height: 4px } 50% { height: 16px } }
+@media (prefers-reduced-motion: reduce) { .eq i { animation: none; height: 10px; } }
+
+/* Tela inicial */
+.escolher h1 { font-size: 28px; margin: 6px 0 0; text-wrap: balance; }
+.reuniao-btn { display: grid; grid-template-columns: auto 1fr; gap: 4px 16px; align-items: center; text-align: left; padding: 18px; min-height: 96px; border-radius: var(--radius); border: 2px solid var(--line); background: var(--surface); }
+.reuniao-btn .hora { font-size: 32px; font-weight: 700; font-variant-numeric: tabular-nums; grid-row: span 2; }
+.reuniao-btn .p { font-size: 22px; font-weight: 700; }
+.reuniao-btn .v { color: var(--muted); }
+.note { color: var(--muted); font-size: 15px; margin: 0; }
+
+/* Variante A: cartões */
+.mini { display: grid; gap: 6px; }
+.mini .cap { font-weight: 700; }
+.cards { display: grid; gap: 10px; }
+.card {
+  display: grid; grid-template-columns: 48px minmax(0,1fr) auto; gap: 12px; align-items: center;
+  min-height: 76px; padding: 12px 14px; text-align: left; border-radius: var(--radius);
+  border: 2px solid var(--line); background: var(--surface);
+}
+.card .ic { font-size: 30px; text-align: center; }
+.card .t { font-size: 20px; font-weight: 700; line-height: 1.2; }
+.card .d { color: var(--muted); font-size: 15px; }
+.card.on { border-color: var(--live); background: var(--live-bg); border-width: 3px; }
+.toolbar { position: sticky; bottom: 0; margin-top: auto; background: var(--bg); border-top: 1px solid var(--line); padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px)); display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px; }
+.toolbar .btn { flex-direction: column; gap: 2px; font-size: 16px; min-height: 72px; padding: 6px; }
+.toolbar .btn .i { font-size: 26px; }
+
+/* Variante B: um de cada vez */
+.agora { display: grid; gap: 2px; }
+.agora .t { font-size: 24px; font-weight: 700; }
+.next-btn { min-height: 150px; border-radius: 20px; border: 0; background: var(--accent); color: var(--on-accent); display: grid; place-content: center; gap: 6px; padding: 14px; text-align: center; }
+.next-btn .a { font-size: 34px; font-weight: 700; }
+.next-btn .b { font-size: 18px; opacity: .9; }
+.next-btn:disabled { opacity: .45; cursor: default; }
+.b-actions { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
+
+/* Variante C: grade */
+.status { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: center; padding: 12px 14px; border-radius: var(--radius); background: var(--live-bg); border: 2px solid var(--live); }
+.status .dot { width: 16px; height: 16px; border-radius: 50%; background: var(--live); }
+.status .t { font-weight: 700; font-size: 19px; min-width: 0; }
+.status.off { background: var(--surface-2); border-color: var(--line); }
+.status.off .dot { background: var(--muted); }
+.actions4 { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 8px; }
+.round { display: grid; justify-items: center; gap: 4px; background: none; border: 0; padding: 0; font-size: 14px; font-weight: 700; }
+.round .c { width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; font-size: 28px; background: var(--surface); border: 2px solid var(--line); }
+.round.danger .c { border-color: var(--danger); background: var(--danger-bg); }
+.round.live .c { border-color: var(--live); background: var(--live-bg); }
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
+.tile { display: grid; align-content: start; gap: 6px; min-height: 150px; padding: 12px; border-radius: 18px; border: 3px solid transparent; text-align: left; color: #fff; position: relative; }
+.tile .ic { font-size: 40px; line-height: 1; }
+.tile .k { font-size: 13px; letter-spacing: .1em; text-transform: uppercase; font-weight: 700; opacity: .85; }
+.tile .t { font-size: 18px; font-weight: 700; line-height: 1.2; }
+.tile.musica { background: #6b3fa0; } .tile.video { background: #24456f; } .tile.imagem { background: #8a4b16; }
+.tile.versiculo { background: #2f6b4f; } .tile.pregacao { background: #4a5260; }
+.tile.on { border-color: var(--live); box-shadow: 0 0 0 4px var(--live-bg); }
+.tile .chip { position: absolute; top: 10px; right: 10px; background: #fff; color: #17803f; }
+
+/* Painéis por cima do Controle */
+.overlay { position: absolute; inset: 0; background: var(--bg); z-index: 20; display: flex; flex-direction: column; }
+.overlay-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--line); background: var(--surface); }
+.overlay-head h2 { margin: 0; font-size: 22px; min-width: 0; }
+.overlay-head .btn { min-height: 52px; font-size: 17px; }
+.overlay-body { flex: 1; overflow-y: auto; padding: 14px; display: grid; gap: 14px; align-content: start; }
+.tabs { display: grid; grid-template-columns: repeat(auto-fit, minmax(0,1fr)); gap: 6px; }
+.tabs .btn { min-height: 56px; font-size: 16px; }
+.tabs .btn.sel { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.books { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; }
+.books .btn { min-height: 60px; font-size: 18px; }
+.nums { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 8px; }
+.nums .btn { min-height: 60px; font-size: 22px; padding: 0; font-variant-numeric: tabular-nums; }
+.list { display: grid; gap: 8px; }
+.list .btn { justify-content: flex-start; text-align: left; }
+.step-nav { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.step-nav .btn { min-height: 120px; font-size: 30px; flex-direction: column; gap: 4px; line-height: 1.1; }
+.step-nav small { font-size: 17px; font-weight: 700; }
+.step-count { text-align: center; font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.confirm { display: grid; gap: 14px; padding: 24px 16px; align-content: center; flex: 1; text-align: center; }
+.confirm h2 { font-size: 28px; margin: 0; text-wrap: balance; }
+.confirm p { margin: 0; color: var(--muted); font-size: 19px; }
+</style>
+
+<div class="app" id="app"></div>
+
+<script>
+/* ===================== DADOS DE EXEMPLO ===================== */
+const REUNIOES = [
+  { id: 'r1', hora: '07:00', pastor: 'Pr. João', versao: 'ACF', nome: 'Reunião de Domingo · 07h' },
+  { id: 'r2', hora: '19:00', pastor: 'Pr. Carlos', versao: 'NVI', nome: 'Reunião de Domingo · 19h' },
+];
+const PREG = [
+  ['A fé que move montanhas', 'Pregação de domingo', '#1d3557', '#457b9d'],
+  ['Hebreus 11:1', 'A fé é o firme fundamento das coisas que se esperam', '#3a2e5c', '#6d5a9c'],
+  ['O que é a fé?', 'Confiar no que Deus prometeu', '#1f4037', '#3f7d5f'],
+  ['Fé em ação', 'A fé sem obras é morta (Tiago 2:26)', '#5c2a1e', '#a35a3a'],
+  ['Exemplos de fé', 'Abraão · Moisés · Raabe', '#283044', '#4f5d75'],
+  ['Ore conosco', 'Deixe seu pedido de oração na saída', '#14213d', '#355070'],
+];
+const ITENS = [
+  { id: 'i1', tipo: 'musica', titulo: 'Firme nas Promessas', sub: 'Hino' },
+  { id: 'i2', tipo: 'imagem', titulo: 'Convite – Vigília de sexta', cena: 'convite', sub: 'Convite' },
+  { id: 'i3', tipo: 'versiculo', titulo: 'Salmos 23:1-6', livro: 'Salmos', cap: 23, de: 1, ate: 6, sub: 'Versículos' },
+  { id: 'i4', tipo: 'musica', titulo: 'Piano suave', sub: 'Fundo de oração' },
+  { id: 'i5', tipo: 'video', titulo: 'Testemunho – Irmã Ana', dur: 15, sub: 'Vídeo' },
+  { id: 'i6', tipo: 'pregacao', titulo: 'A fé que move montanhas', sub: 'Pregação' },
+  { id: 'i7', tipo: 'versiculo', titulo: 'João 3:16', livro: 'João', cap: 3, de: 16, ate: 16, sub: 'Versículo' },
+  { id: 'i8', tipo: 'imagem', titulo: 'Convite – Reunião de libertação', cena: 'convite2', sub: 'Convite' },
+  { id: 'i9', tipo: 'musica', titulo: 'Grandioso És Tu', sub: 'Hino' },
+];
+const ICON = { musica: '🎵', imagem: '🖼️', versiculo: '📖', video: '🎬', pregacao: '📄' };
+const TIPO = { musica: 'Música', imagem: 'Imagem', versiculo: 'Versículo', video: 'Vídeo', pregacao: 'Pregação' };
+const BIBLIOTECA = {
+  'Hinos': ['Firme nas Promessas', 'Rude Cruz', 'Castelo Forte', 'Mais Perto Quero Estar', 'Grandioso És Tu', 'Sou Feliz com Jesus'],
+  'Louvores': ['Louvor da vitória', 'Deus é fiel', 'Tu és santo', 'Aleluia ao Rei'],
+  'Fundos de oração': ['Piano suave', 'Violino e chuva', 'Instrumental calmo', 'Teclado – adoração'],
+};
+const AT = [['Gênesis',50],['Êxodo',40],['Levítico',27],['Números',36],['Deuteronômio',34],['Josué',24],['Juízes',21],['Rute',4],['1 Samuel',31],['2 Samuel',24],['1 Reis',22],['2 Reis',25],['1 Crônicas',29],['2 Crônicas',36],['Esdras',10],['Neemias',13],['Ester',10],['Jó',42],['Salmos',150],['Provérbios',31],['Eclesiastes',12],['Cantares',8],['Isaías',66],['Jeremias',52],['Lamentações',5],['Ezequiel',48],['Daniel',12],['Oséias',14],['Joel',3],['Amós',9],['Obadias',1],['Jonas',4],['Miquéias',7],['Naum',3],['Habacuque',3],['Sofonias',3],['Ageu',2],['Zacarias',14],['Malaquias',4]];
+const NT = [['Mateus',28],['Marcos',16],['Lucas',24],['João',21],['Atos',28],['Romanos',16],['1 Coríntios',16],['2 Coríntios',13],['Gálatas',6],['Efésios',6],['Filipenses',4],['Colossenses',4],['1 Tessalonicenses',5],['2 Tessalonicenses',3],['1 Timóteo',6],['2 Timóteo',4],['Tito',3],['Filemom',1],['Hebreus',13],['Tiago',5],['1 Pedro',5],['2 Pedro',3],['1 João',5],['2 João',1],['3 João',1],['Judas',1],['Apocalipse',22]];
+const CAPS = Object.fromEntries([...AT, ...NT]);
+const NVERS = { 'Salmos 23': 6, 'João 3': 36, 'Filipenses 4': 23, 'Isaías 41': 29, 'Mateus 11': 30, 'Romanos 8': 39 };
+const TEXTO = {
+  'Salmos 23:1': ['O SENHOR é o meu pastor, nada me faltará.', 'O Senhor é o meu pastor; de nada terei falta.'],
+  'Salmos 23:2': ['Deitar-me faz em verdes pastos, guia-me mansamente a águas tranqüilas.', 'Em verdes pastagens me faz repousar e me conduz a águas tranqüilas;'],
+  'Salmos 23:3': ['Refrigera a minha alma; guia-me pelas veredas da justiça, por amor do seu nome.', 'restaura-me o vigor. Guia-me nas veredas da justiça por amor do seu nome.'],
+  'Salmos 23:4': ['Ainda que eu andasse pelo vale da sombra da morte, não temeria mal algum, porque tu estás comigo; a tua vara e o teu cajado me consolam.', 'Mesmo quando eu andar por um vale de trevas e morte, não temerei perigo algum, pois tu estás comigo; a tua vara e o teu cajado me protegem.'],
+  'Salmos 23:5': ['Preparas uma mesa perante mim na presença dos meus inimigos, unges a minha cabeça com óleo, o meu cálice transborda.', 'Preparas um banquete para mim à vista dos meus inimigos. Tu me honras, ungindo a minha cabeça com óleo e fazendo transbordar o meu cálice.'],
+  'Salmos 23:6': ['Certamente que a bondade e a misericórdia me seguirão todos os dias da minha vida; e habitarei na casa do Senhor por longos dias.', 'Sei que a bondade e a fidelidade me acompanharão todos os dias da minha vida, e voltarei à casa do Senhor enquanto eu viver.'],
+  'João 3:16': ['Porque Deus amou o mundo de tal maneira que deu o seu Filho unigênito, para que todo aquele que nele crê não pereça, mas tenha a vida eterna.', 'Porque Deus tanto amou o mundo que deu o seu Filho Unigênito, para que todo o que nele crer não pereça, mas tenha a vida eterna.'],
+  'Filipenses 4:13': ['Posso todas as coisas em Cristo que me fortalece.', 'Tudo posso naquele que me fortalece.'],
+  'Isaías 41:10': ['Não temas, porque eu sou contigo; não te assombres, porque eu sou teu Deus; eu te fortaleço, e te ajudo, e te sustento com a destra da minha justiça.', 'Por isso não tema, pois estou com você; não tenha medo, pois sou o seu Deus. Eu o fortalecerei e o ajudarei; eu o segurarei com a minha mão direita vitoriosa.'],
+  'Mateus 11:28': ['Vinde a mim, todos os que estais cansados e oprimidos, e eu vos aliviarei.', 'Venham a mim, todos os que estão cansados e sobrecarregados, e eu darei descanso a vocês.'],
+  'Romanos 8:28': ['E sabemos que todas as coisas contribuem juntamente para o bem daqueles que amam a Deus, daqueles que são chamados segundo o seu propósito.', 'Sabemos que Deus age em todas as coisas para o bem daqueles que o amam, dos que foram chamados de acordo com o seu propósito.'],
+};
+/* Exemplo: como se o pastor tivesse mostrado estes nas últimas reuniões */
+const RECENTES_INICIAIS = [['Filipenses',4,13],['Isaías',41,10],['Mateus',11,28],['Romanos',8,28]];
+const VARIANTES = { A: 'Cartões', B: 'Um de cada vez', C: 'Grade de botões' };
+
+/* ===================== ESTADO (só na memória) ===================== */
+const S = {
+  variante: 'A', switcherOculto: false,
+  tela: 'escolher', reuniao: null,
+  tv: { kind: 'espera' }, tvAntesPreto: null, tvAntesAvulso: null,
+  atual: null, passo: 0, cursor: -1,
+  video: null, som: null, volume: 7,
+  detalhe: null, modal: null,
+  picker: { test: 'AT', livro: null, cap: null }, aba: 'Hinos', avulso: null,
+  recentes: RECENTES_INICIAIS.map(([l, c, v]) => ({ l, c, v })),
+};
+/* Guarda o versículo aberto no topo de "Últimos usados" (sem repetir, no máximo 6) */
+function lembrar(r) {
+  S.recentes = [r, ...S.recentes.filter(x => refTxt(x) !== refTxt(r))].slice(0, 6);
+}
+
+const item = id => ITENS.find(i => i.id === id);
+const passos = it => it.tipo === 'pregacao' ? PREG.length : it.tipo === 'versiculo' ? it.ate - it.de + 1 : 1;
+const reuniao = () => REUNIOES.find(r => r.id === S.reuniao);
+const versao = () => (reuniao() || REUNIOES[0]).versao;
+const nVers = (l, c) => NVERS[l + ' ' + c] || 30;
+const LIVROS = [...AT, ...NT].map(x => x[0]);
+/* Anda um versículo para frente ou para trás, passando de capítulo e de livro. */
+function vizinho(r, d) {
+  let { l, c, v } = r; v += d;
+  if (v < 1) {
+    c -= 1;
+    if (c < 1) { const i = LIVROS.indexOf(l) - 1; if (i < 0) return null; l = LIVROS[i]; c = CAPS[l]; }
+    v = nVers(l, c);
+  } else if (v > nVers(l, c)) {
+    c += 1; v = 1;
+    if (c > CAPS[l]) { const i = LIVROS.indexOf(l) + 1; if (i >= LIVROS.length) return null; l = LIVROS[i]; c = 1; }
+  }
+  return { l, c, v };
+}
+const refTxt = r => `${r.l} ${r.c}:${r.v}`;
+const dentroDoPlanejado = (it, r) => r.l === it.livro && r.c === it.cap && r.v >= it.de && r.v <= it.ate;
+const mmss = s => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+function texto(l, c, v) {
+  const t = TEXTO[`${l} ${c}:${v}`];
+  if (t) return versao() === 'ACF' ? t[0] : t[1];
+  return `(Texto de exemplo. No programa de verdade aparece aqui ${l} ${c}:${v} na versão ${versao()}.)`;
+}
+
+/* ===================== AÇÕES ===================== */
+function tocarItem(id, abrirDetalhe) {
+  const it = item(id);
+  S.cursor = ITENS.indexOf(it);
+  if (it.tipo === 'musica') {
+    if (S.som && S.som.itemId === id) return;
+    if (S.video) S.video.playing = false;            // não tocar dois sons ao mesmo tempo
+    S.som = { itemId: id, titulo: it.titulo, sub: it.sub, playing: true };
+    return;                                           // música não muda a TV
+  }
+  const navegavel = it.tipo === 'pregacao' || it.tipo === 'versiculo';
+  if (S.atual === id && navegavel) {                  // já está na TV: só reabre os botões ◀ ▶
+    if (abrirDetalhe) S.detalhe = id;
+    S.tv = { kind: 'item', id, passo: S.passo, ref: S.ref };
+    return;
+  }
+  S.som = null;                                       // a música para quando outro item vai para a TV
+  S.video = it.tipo === 'video' ? { itemId: id, t: 0, playing: true, ended: false } : null;
+  S.atual = id; S.passo = 0;
+  S.ref = it.tipo === 'versiculo' ? { l: it.livro, c: it.cap, v: it.de } : null;
+  if (S.ref) lembrar(S.ref);
+  S.tv = { kind: 'item', id, passo: 0, ref: S.ref };
+  if (navegavel && abrirDetalhe) S.detalhe = id;
+}
+function irPasso(d) {
+  const it = item(S.atual); if (!it) return;
+  if (it.tipo === 'versiculo') {                      // versículo: anda livre, fora do planejado também
+    const r = vizinho(S.ref, d); if (!r) return;
+    S.ref = r;
+  } else {
+    S.passo = Math.max(0, Math.min(passos(it) - 1, S.passo + d));
+  }
+  S.tv = { kind: 'item', id: it.id, passo: S.passo, ref: S.ref };
+}
+function proximo(d) {                                 // variante B
+  const it = ITENS[S.cursor];
+  if (it && it.id === S.atual && S.tv.kind === 'item') {
+    if (it.tipo === 'versiculo') {
+      const r = vizinho(S.ref, d);
+      if (r && dentroDoPlanejado(it, r)) { irPasso(d); return; }
+    } else if (passos(it) > 1) {
+      const alvo = S.passo + d;
+      if (alvo >= 0 && alvo < passos(it)) { irPasso(d); return; }
+    }
+  }
+  const n = S.cursor + d;
+  if (n < 0 || n >= ITENS.length) return;
+  tocarItem(ITENS[n].id, false);
+  const novo = ITENS[n];
+  if (d < 0 && novo.tipo === 'pregacao') { S.passo = passos(novo) - 1; S.tv = { kind: 'item', id: novo.id, passo: S.passo }; }
+  if (d < 0 && novo.tipo === 'versiculo') { S.ref = { l: novo.livro, c: novo.cap, v: novo.ate }; S.tv = { kind: 'item', id: novo.id, passo: 0, ref: S.ref }; }
+}
+function mostrarAvulso(l, c, v) {
+  if (S.tv.kind !== 'avulso') S.tvAntesAvulso = S.tv.kind === 'preto' ? (S.tvAntesPreto || { kind: 'espera' }) : S.tv;
+  S.avulso = { l, c: +c, v: +v };
+  lembrar(S.avulso);
+  S.tv = { kind: 'avulso' };
+  S.modal = null;
+}
+const A = {
+  escolher: v => { S.reuniao = v; S.tela = 'reuniao'; },
+  item: v => { tocarItem(v, S.variante !== 'B'); if (S.modal === 'lista') S.modal = null; },
+  passo: v => irPasso(+v),
+  fecharDetalhe: () => { S.detalhe = null; },
+  prox: () => proximo(1), ant: () => proximo(-1),
+  apagar: () => {
+    if (S.tv.kind === 'preto') { S.tv = S.tvAntesPreto || { kind: 'espera' }; S.tvAntesPreto = null; }
+    else { S.tvAntesPreto = S.tv; S.tv = { kind: 'preto' }; }
+  },
+  modal: v => { S.modal = v; S.picker = { test: 'AT', livro: null, cap: null }; },
+  fecharModal: () => { S.modal = null; },
+  test: v => { S.picker.test = v; },
+  livro: v => { S.picker.livro = v; S.picker.cap = CAPS[v] === 1 ? 1 : null; },
+  cap: v => { S.picker.cap = +v; },
+  vers: v => mostrarAvulso(S.picker.livro, S.picker.cap, v),
+  pickerVoltar: () => { if (S.picker.cap && CAPS[S.picker.livro] > 1) S.picker.cap = null; else { S.picker.livro = null; S.picker.cap = null; } },
+  atalho: v => { const [l, c, n] = v.split('|'); mostrarAvulso(l, c, n); },
+  avulsoPasso: v => { const r = vizinho(S.avulso, +v); if (r) S.avulso = r; },
+  voltarReuniao: () => { S.tv = S.tvAntesAvulso || { kind: 'espera' }; S.avulso = null; S.tvAntesAvulso = null; },
+  aba: v => { S.aba = v; },
+  musica: v => { if (S.video) S.video.playing = false; S.som = { itemId: null, titulo: v, sub: S.aba === 'Hinos' ? 'Hino' : S.aba === 'Louvores' ? 'Louvor' : 'Fundo de oração', playing: true, avulsa: true }; S.modal = null; },
+  pausar: () => { if (S.video) S.video.playing = false; },
+  continuar: () => { if (S.video) { if (S.video.ended) { S.video.t = 0; S.video.ended = false; } S.video.playing = true; S.som = null; } },
+  pausarSom: () => { if (S.som) S.som.playing = false; },
+  continuarSom: () => { if (S.som) S.som.playing = true; },
+  pararSom: () => { S.som = null; },
+  vol: v => { S.volume = Math.max(0, Math.min(10, S.volume + +v)); },
+  encerrar: () => {
+    Object.assign(S, { tela: 'escolher', reuniao: null, tv: { kind: 'espera' }, tvAntesPreto: null, tvAntesAvulso: null,
+      atual: null, passo: 0, cursor: -1, video: null, som: null, detalhe: null, modal: null, avulso: null });
+  },
+  varPrev: () => trocarVariante(-1), varNext: () => trocarVariante(1),
+  esconder: () => { S.switcherOculto = true; },
+};
+function trocarVariante(d) {
+  const ks = Object.keys(VARIANTES);
+  S.variante = ks[(ks.indexOf(S.variante) + d + ks.length) % ks.length];
+  S.detalhe = null; if (S.modal === 'lista') S.modal = null;
+  try { history.replaceState(null, '', '#variante-' + S.variante.toLowerCase()); } catch (e) {}
+}
+
+/* ===================== TELÃO ===================== */
+function tvLabel() {
+  const t = S.tv;
+  if (t.kind === 'espera') return 'Tela de espera';
+  if (t.kind === 'preto') return 'TV apagada (tela preta)';
+  if (t.kind === 'avulso') return `Versículo avulso: ${S.avulso.l} ${S.avulso.c}:${S.avulso.v}`;
+  const it = item(t.id);
+  if (it.tipo === 'video') return it.titulo + (S.video?.ended ? ' (parado no último quadro)' : S.video?.playing ? ' (passando)' : ' (pausado)');
+  if (it.tipo === 'versiculo') return refTxt(t.ref);
+  if (it.tipo === 'pregacao') return `${it.titulo} (imagem ${t.passo + 1} de ${PREG.length})`;
+  return it.titulo;
+}
+function verseScene(l, c, v) {
+  const tx = texto(l, c, v);
+  const fs = tx.length < 70 ? 5.6 : tx.length < 140 ? 4.6 : tx.length < 220 ? 3.8 : 3.2;
+  return `<div class="scene verse"><div class="t" style="font-size:${fs}cqw">${tx}</div><div class="r">${l} ${c}:${v} · ${versao()}</div></div>`;
+}
+function tvHTML(cls) {
+  const t = S.tv;
+  let inner;
+  if (t.kind === 'espera') inner = `<div class="scene espera"><div class="k">Igreja</div><div class="h">Seja bem-vindo</div><div class="s">Tela de espera · aqui entra a imagem da igreja</div></div>`;
+  else if (t.kind === 'preto') inner = `<div class="scene preto"><div class="s">tela preta</div></div>`;
+  else if (t.kind === 'avulso') inner = verseScene(S.avulso.l, S.avulso.c, S.avulso.v);
+  else {
+    const it = item(t.id);
+    if (it.tipo === 'imagem' && it.cena === 'convite') inner = `<div class="scene convite"><div class="k">Convite</div><div class="h">Vigília</div><div class="s">Sexta-feira · 22h · Venha orar conosco</div><div class="tag">imagem de exemplo</div></div>`;
+    else if (it.tipo === 'imagem') inner = `<div class="scene convite2"><div class="k">Convite</div><div class="h">Reunião de libertação</div><div class="s">Terça-feira · 19h30</div><div class="tag">imagem de exemplo</div></div>`;
+    else if (it.tipo === 'video' && S.video?.ended) inner = `<div class="scene frozen"><div class="big">👨‍👩‍👧</div><div class="h">Família sorrindo</div><div class="s">último quadro do vídeo · fica parado até o pastor trocar</div></div>`;
+    else if (it.tipo === 'video') inner = `<div class="scene video"><div class="k">Vídeo</div><div class="h">${it.titulo}</div><div class="s">${S.video?.playing ? 'vídeo passando…' : 'pausado'}</div><div class="tag">vídeo de exemplo</div></div>`;
+    else if (it.tipo === 'pregacao') { const p = PREG[t.passo]; inner = `<div class="scene preg" style="--pa:${p[2]};--pb:${p[3]}"><div class="h">${p[0]}</div><div class="s">${p[1]}</div><div class="tag">${t.passo + 1} / ${PREG.length}</div></div>`; }
+    else if (it.tipo === 'versiculo') inner = verseScene(t.ref.l, t.ref.c, t.ref.v);
+  }
+  return `<div class="tv ${cls || ''}" role="img" aria-label="TV mostrando: ${tvLabel()}">${inner}</div>`;
+}
+
+/* ===================== PEÇAS DO CONTROLE ===================== */
+function volHTML() {
+  return `<div class="vol"><button class="btn" data-action="vol" data-v="-1" aria-label="Diminuir volume">−</button>
+    <div class="segs" aria-hidden="true">${Array.from({ length: 10 }, (_, i) => `<i class="${i < S.volume ? 'on' : ''}" style="height:${30 + i * 7}%"></i>`).join('')}</div>
+    <button class="btn" data-action="vol" data-v="1" aria-label="Aumentar volume">+</button>
+    <div class="vol-lbl">Volume ${S.volume} de 10</div></div>`;
+}
+function mediaHTML() {
+  let h = '';
+  if (S.video && S.tv.kind === 'item' && S.tv.id === S.video.itemId) {
+    const v = S.video, it = item(v.itemId);
+    h += `<div class="media"><div class="what">🎬 ${it.titulo}</div>
+      <div class="bar"><i data-vprog style="width:${(v.t / it.dur) * 100}%"></i></div>
+      <div class="sub"><span data-vtime>${mmss(v.t)}</span> de ${mmss(it.dur)}${v.ended ? ' · terminou, a TV ficou no último quadro' : ''}</div>
+      <div class="row">${v.playing
+        ? `<button class="btn" data-action="pausar">⏸ Pausar</button>`
+        : `<button class="btn primary" data-action="continuar">${v.ended ? '↺ Passar de novo' : '▶ Continuar'}</button>`}</div>
+      ${volHTML()}</div>`;
+  }
+  if (S.som) {
+    h += `<div class="media"><div class="what">${S.som.playing ? '<span class="eq" aria-hidden="true"><i></i><i></i><i></i></span>' : '🎵'} ${S.som.titulo}</div>
+      <div class="sub">${S.som.sub} · ${S.som.playing ? 'tocando' : 'pausada'} · a TV continua como está</div>
+      <div class="row">${S.som.playing ? `<button class="btn" data-action="pausarSom">⏸ Pausar</button>` : `<button class="btn primary" data-action="continuarSom">▶ Continuar</button>`}
+      <button class="btn danger" data-action="pararSom">⏹ Parar música</button></div>
+      ${volHTML()}</div>`;
+  }
+  return h;
+}
+function topHTML() {
+  const r = reuniao();
+  return `<div class="top"><div class="nome">${r.nome}</div><div class="quem">${r.pastor} · Bíblia ${r.versao}</div></div>`;
+}
+const apagarLbl = () => S.tv.kind === 'preto' ? ['💡', 'Ligar TV'] : ['⬛', 'Apagar TV'];
+
+function escolherHTML() {
+  return `<div class="pad escolher">
+    <div class="eyebrow">Hoje · domingo</div>
+    <h1>Qual reunião vai começar?</h1>
+    ${REUNIOES.map(r => `<button class="reuniao-btn" data-action="escolher" data-v="${r.id}">
+      <span class="hora">${r.hora}</span><span class="p">${r.pastor}</span><span class="v">Bíblia ${r.versao}</span></button>`).join('')}
+    <p class="note">Protótipo: nomes, horários e mídias são exemplos. Nada é salvo.</p>
+  </div>`;
+}
+
+/* ---- Variante A: lista de cartões ---- */
+function cardHTML(it) {
+  const naTv = S.tv.kind === 'item' && S.tv.id === it.id;
+  const tocando = S.som && S.som.itemId === it.id;
+  const on = naTv || tocando;
+  const chip = naTv ? '<span class="chip">NA TV</span>' : tocando ? `<span class="chip">${S.som.playing ? 'TOCANDO' : 'PAUSADA'}</span>` : '';
+  const n = passos(it);
+  return `<button class="card ${on ? 'on' : ''}" data-action="item" data-v="${it.id}">
+    <span class="ic" aria-hidden="true">${ICON[it.tipo]}</span>
+    <span><span class="t">${it.titulo}</span><br><span class="d">${it.sub}${n > 1 ? ` · ${n} telas` : ''}</span></span>${chip}</button>`;
+}
+function varianteA() {
+  const [ai, al] = apagarLbl();
+  return `<div class="pad">
+    ${topHTML()}
+    <div class="mini"><div class="eyebrow">Na TV agora</div>${tvHTML()}<div class="cap">${tvLabel()}</div></div>
+    ${mediaHTML()}
+    <div class="eyebrow">Toque para mostrar na TV</div>
+    <div class="cards">${ITENS.map(cardHTML).join('')}</div>
+    <button class="btn danger" data-action="modal" data-v="encerrar">✅ Encerrar reunião</button>
+  </div>
+  <div class="toolbar">
+    <button class="btn" data-action="modal" data-v="versiculo"><span class="i">📖</span>Versículo</button>
+    <button class="btn" data-action="modal" data-v="musica"><span class="i">🎵</span>Música</button>
+    <button class="btn ${S.tv.kind === 'preto' ? 'live' : ''}" data-action="apagar"><span class="i">${ai}</span>${al}</button>
+  </div>`;
+}
+
+/* ---- Variante B: um de cada vez ---- */
+function varianteB() {
+  const cur = ITENS[S.cursor];
+  let nextTxt = 'Fim da reunião', prevOk = S.cursor > 0 || (cur && S.passo > 0);
+  if (S.cursor < 0) nextTxt = ITENS[0].titulo;
+  else if (cur && cur.id === S.atual && cur.tipo === 'versiculo' && vizinho(S.ref, 1) && dentroDoPlanejado(cur, vizinho(S.ref, 1))) nextTxt = refTxt(vizinho(S.ref, 1));
+  else if (cur && cur.id === S.atual && cur.tipo === 'pregacao' && S.passo < passos(cur) - 1) nextTxt = `${cur.titulo} · tela ${S.passo + 2} de ${passos(cur)}`;
+  else if (S.cursor + 1 < ITENS.length) nextTxt = ITENS[S.cursor + 1].titulo;
+  const temProx = nextTxt !== 'Fim da reunião';
+  const [ai, al] = apagarLbl();
+  return `<div class="pad">
+    ${topHTML()}
+    ${tvHTML()}
+    <div class="agora"><div class="eyebrow">Agora</div><div class="t">${cur ? ICON[cur.tipo] + ' ' + (cur.tipo === 'versiculo' && cur.id === S.atual ? refTxt(S.ref) : cur.titulo + (cur.tipo === 'pregacao' && cur.id === S.atual ? ` · ${S.passo + 1} de ${passos(cur)}` : '')) : 'Ainda não começou'}</div></div>
+    ${mediaHTML()}
+    <button class="next-btn" data-action="prox" ${temProx ? '' : 'disabled'}><span class="a">${S.cursor < 0 ? 'COMEÇAR ▶' : 'PRÓXIMO ▶'}</span><span class="b">${temProx ? 'Vai para: ' + nextTxt : nextTxt}</span></button>
+    <button class="btn" data-action="ant" ${prevOk ? '' : 'disabled'}>◀ Voltar um</button>
+    <div class="b-actions">
+      <button class="btn" data-action="modal" data-v="lista">☰ Ver a lista</button>
+      <button class="btn ${S.tv.kind === 'preto' ? 'live' : ''}" data-action="apagar">${ai} ${al}</button>
+      <button class="btn" data-action="modal" data-v="versiculo">📖 Versículo</button>
+      <button class="btn" data-action="modal" data-v="musica">🎵 Música</button>
+    </div>
+    <button class="btn danger" data-action="modal" data-v="encerrar">✅ Encerrar reunião</button>
+  </div>`;
+}
+
+/* ---- Variante C: grade de botões ---- */
+function varianteC() {
+  const [ai, al] = apagarLbl();
+  const off = S.tv.kind === 'espera' || S.tv.kind === 'preto';
+  return `<div class="pad">
+    ${topHTML()}
+    <div class="status ${off ? 'off' : ''}"><span class="dot"></span><span class="t">Na TV: ${tvLabel()}</span></div>
+    <div class="actions4">
+      <button class="round" data-action="modal" data-v="versiculo"><span class="c">📖</span>Versículo</button>
+      <button class="round" data-action="modal" data-v="musica"><span class="c">🎵</span>Música</button>
+      <button class="round ${S.tv.kind === 'preto' ? 'live' : ''}" data-action="apagar"><span class="c">${ai}</span>${al}</button>
+      <button class="round danger" data-action="modal" data-v="encerrar"><span class="c">✅</span>Encerrar</button>
+    </div>
+    ${mediaHTML()}
+    <div class="grid">${ITENS.map(it => {
+      const naTv = S.tv.kind === 'item' && S.tv.id === it.id, toc = S.som && S.som.itemId === it.id;
+      return `<button class="tile ${it.tipo} ${naTv || toc ? 'on' : ''}" data-action="item" data-v="${it.id}">
+        ${naTv ? '<span class="chip">NA TV</span>' : toc ? '<span class="chip">TOCANDO</span>' : ''}
+        <span class="ic" aria-hidden="true">${ICON[it.tipo]}</span><span class="k">${it.sub}</span><span class="t">${it.titulo}</span></button>`;
+    }).join('')}</div>
+  </div>`;
+}
+
+/* ---- Painéis ---- */
+/* Navegação livre de versículos: usada no versículo planejado e no avulso */
+function leituraHTML(r, acao, extra) {
+  const ant = vizinho(r, -1), prox = vizinho(r, 1);
+  return `${tvHTML()}
+    <div class="step-count">${refTxt(r)} · ${versao()}</div>
+    <div class="step-nav">
+      <button class="btn" data-action="${acao}" data-v="-1" ${ant ? '' : 'disabled'}>◀<br><small>${ant ? refTxt(ant) : 'início da Bíblia'}</small></button>
+      <button class="btn primary" data-action="${acao}" data-v="1" ${prox ? '' : 'disabled'}>▶<br><small>${prox ? refTxt(prox) : 'fim da Bíblia'}</small></button>
+    </div>
+    ${extra || ''}
+    <button class="btn" data-action="modal" data-v="versiculo">🔎 Escolher outro versículo</button>`;
+}
+function detalheHTML() {
+  const it = item(S.detalhe), n = passos(it);
+  if (it.tipo === 'versiculo') {
+    const fora = !dentroDoPlanejado(it, S.ref);
+    return `<div class="overlay"><div class="overlay-head"><h2>📖 ${refTxt(S.ref)}</h2>
+        <button class="btn" data-action="fecharDetalhe">✕ Fechar</button></div>
+      <div class="overlay-body">${leituraHTML(S.ref, 'passo',
+        `<p class="note">${fora ? `Passou do planejado (${it.titulo}). Pode continuar lendo à vontade.` : `Planejado: ${it.titulo}. As setas continuam além disso, se quiser.`}</p>`)}</div></div>`;
+  }
+  const rotulo = it.tipo === 'pregacao' ? 'Imagem' : 'Versículo';
+  return `<div class="overlay"><div class="overlay-head"><h2>${ICON[it.tipo]} ${it.titulo}</h2>
+      <button class="btn" data-action="fecharDetalhe">✕ Fechar</button></div>
+    <div class="overlay-body">
+      ${tvHTML()}
+      <div class="step-count">${rotulo} ${S.passo + 1} de ${n}</div>
+      <div class="step-nav">
+        <button class="btn" data-action="passo" data-v="-1" ${S.passo === 0 ? 'disabled' : ''}>◀ Voltar</button>
+        <button class="btn primary" data-action="passo" data-v="1" ${S.passo === n - 1 ? 'disabled' : ''}>Avançar ▶</button>
+      </div>
+      ${S.passo === n - 1 ? `<p class="note">Última ${rotulo.toLowerCase()}. Toque em "Fechar" para voltar à lista. A TV continua mostrando esta tela.</p>` : ''}
+    </div></div>`;
+}
+function avulsoHTML() {
+  const a = S.avulso;
+  return `<div class="overlay"><div class="overlay-head"><h2>📖 ${refTxt(a)}</h2></div>
+    <div class="overlay-body">
+      ${leituraHTML(a, 'avulsoPasso')}
+      <button class="btn danger huge" data-action="voltarReuniao">↩ Voltar para a reunião</button>
+      <p class="note">As setas passam de capítulo e de livro sozinhas. "Voltar para a reunião" devolve a TV para o que estava antes.</p>
+    </div></div>`;
+}
+function versiculoModal() {
+  const p = S.picker;
+  let body, titulo = 'Mostrar versículo', voltar = '';
+  if (!p.livro) {
+    const lista = p.test === 'AT' ? AT : NT;
+    body = `<div class="eyebrow">Últimos usados</div>
+      ${S.recentes.length ? `<div class="books">${S.recentes.map(r => `<button class="btn" data-action="atalho" data-v="${r.l}|${r.c}|${r.v}">${refTxt(r)}</button>`).join('')}</div>` : '<p class="note">Os versículos que você mostrar vão aparecer aqui.</p>'}
+      <div class="eyebrow">Ou escolha o livro</div>
+      <div class="tabs"><button class="btn ${p.test === 'AT' ? 'sel' : ''}" data-action="test" data-v="AT">Antigo Testamento</button>
+        <button class="btn ${p.test === 'NT' ? 'sel' : ''}" data-action="test" data-v="NT">Novo Testamento</button></div>
+      <div class="books">${lista.map(([l]) => `<button class="btn" data-action="livro" data-v="${l}">${l}</button>`).join('')}</div>`;
+  } else if (!p.cap) {
+    titulo = `${p.livro}: capítulo`; voltar = `<button class="btn" data-action="pickerVoltar">◀ Voltar</button>`;
+    body = `<div class="nums">${Array.from({ length: CAPS[p.livro] }, (_, i) => `<button class="btn" data-action="cap" data-v="${i + 1}">${i + 1}</button>`).join('')}</div>`;
+  } else {
+    titulo = `${p.livro} ${p.cap}: versículo`; voltar = `<button class="btn" data-action="pickerVoltar">◀ Voltar</button>`;
+    body = `<div class="nums">${Array.from({ length: nVers(p.livro, p.cap) }, (_, i) => `<button class="btn" data-action="vers" data-v="${i + 1}">${i + 1}</button>`).join('')}</div>
+      ${NVERS[p.livro + ' ' + p.cap] ? '' : '<p class="note">No protótipo todo capítulo tem 30 versículos.</p>'}`;
+  }
+  return `<div class="overlay"><div class="overlay-head">${voltar}<h2>${titulo}</h2><button class="btn" data-action="fecharModal">✕ Cancelar</button></div>
+    <div class="overlay-body" data-scroll="picker-${p.livro || p.test}-${p.cap || ''}">${body}</div></div>`;
+}
+function musicaModal() {
+  return `<div class="overlay"><div class="overlay-head"><h2>🎵 Tocar música</h2><button class="btn" data-action="fecharModal">✕ Cancelar</button></div>
+    <div class="overlay-body">
+      <div class="tabs">${Object.keys(BIBLIOTECA).map(k => `<button class="btn ${S.aba === k ? 'sel' : ''}" data-action="aba" data-v="${k}">${k}</button>`).join('')}</div>
+      <div class="list">${BIBLIOTECA[S.aba].map(m => `<button class="btn" data-action="musica" data-v="${m}">▶ ${m}</button>`).join('')}</div>
+      <p class="note">A música toca e a TV continua como está.</p>
+    </div></div>`;
+}
+function encerrarModal() {
+  return `<div class="overlay"><div class="confirm">
+    <h2>Encerrar a reunião?</h2><p>A TV volta para a tela de espera e a música para.</p>
+    <button class="btn danger huge" data-action="encerrar">Sim, encerrar</button>
+    <button class="btn huge" data-action="fecharModal">Não, continuar</button></div></div>`;
+}
+function listaModal() {
+  return `<div class="overlay"><div class="overlay-head"><h2>Lista da reunião</h2><button class="btn" data-action="fecharModal">✕ Fechar</button></div>
+    <div class="overlay-body"><div class="cards">${ITENS.map(cardHTML).join('')}</div></div></div>`;
+}
+
+/* ===================== RENDER ===================== */
+const app = document.getElementById('app');
+function render() {
+  const scrolls = {};
+  app.querySelectorAll('[data-scroll]').forEach(el => { scrolls[el.dataset.scroll] = el.scrollTop; });
+
+  let phone = S.tela === 'escolher' ? escolherHTML()
+    : S.variante === 'A' ? varianteA() : S.variante === 'B' ? varianteB() : varianteC();
+  let over = '';
+  if (S.modal === 'versiculo') over = versiculoModal();
+  else if (S.modal === 'musica') over = musicaModal();
+  else if (S.modal === 'encerrar') over = encerrarModal();
+  else if (S.modal === 'lista') over = listaModal();
+  else if (S.tv.kind === 'avulso') over = avulsoHTML();
+  else if (S.detalhe) over = detalheHTML();
+
+  const sw = S.switcherOculto ? '' : `<div class="switcher"><div class="switcher-pill" role="group" aria-label="Trocar variante do protótipo">
+      <button data-action="varPrev" aria-label="Variante anterior">◀</button>
+      <span class="lbl">Variante ${S.variante} · ${VARIANTES[S.variante]}</span>
+      <button data-action="varNext" aria-label="Próxima variante">▶</button>
+      <button class="x" data-action="esconder" aria-label="Esconder barra de variantes">✕</button></div></div>`;
+
+  const r = reuniao();
+  app.innerHTML = `${sw}<div class="stage">
+    <section class="phone" aria-label="Celular do pastor"><div class="phone-scroll" data-scroll="phone-${S.tela}-${S.variante}">${phone}</div>${over}</section>
+    <section class="side" aria-label="Simulação da TV">
+      <div class="side-head"><h2>Telão (TV da igreja)</h2><span>o que a congregação vê</span></div>
+      ${tvHTML('tv-big')}
+      <div class="estado"><h3>Estado do protótipo</h3><dl>
+        <dt>Variante</dt><dd>${S.variante} · ${VARIANTES[S.variante]}</dd>
+        <dt>Reunião</dt><dd>${r ? r.nome + ' · ' + r.pastor : 'nenhuma (escolhendo)'}</dd>
+        <dt>Na TV</dt><dd>${tvLabel()}</dd>
+        <dt>Som</dt><dd>${S.som ? S.som.titulo + (S.som.playing ? ' (tocando)' : ' (pausada)') : S.video?.playing ? 'som do vídeo' : 'nenhum'}</dd>
+        <dt>Volume</dt><dd>${S.volume} de 10</dd>
+        <dt>Painel aberto</dt><dd>${S.modal || (S.tv.kind === 'avulso' ? 'versículo avulso' : S.detalhe ? 'telas do item' : 'nenhum')}</dd>
+      </dl>
+      <p>Regras simuladas: a TV nunca mostra o computador; vídeo que termina fica parado no último quadro; música não muda a TV e para quando outro item vai para a TV.</p></div>
+    </section></div>`;
+
+  app.querySelectorAll('[data-scroll]').forEach(el => { if (scrolls[el.dataset.scroll]) el.scrollTop = scrolls[el.dataset.scroll]; });
+}
+
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-action]');
+  if (!el || el.disabled) return;
+  const fn = A[el.dataset.action];
+  if (fn) { fn(el.dataset.v); render(); }
+});
+document.addEventListener('keydown', e => {
+  if (e.target.closest('input, textarea, [contenteditable]')) return;
+  if (e.key === 'ArrowLeft') { trocarVariante(-1); render(); }
+  if (e.key === 'ArrowRight') { trocarVariante(1); render(); }
+});
+let wake = false;
+document.addEventListener('pointerdown', () => {
+  if (wake) return; wake = true;
+  try { navigator.wakeLock?.request('screen').catch(() => {}); } catch (e) {}
+}, { once: true });
+
+/* Vídeo simulado: 15 segundos */
+setInterval(() => {
+  const v = S.video;
+  if (!v || !v.playing) return;
+  const dur = item(v.itemId).dur;
+  v.t = Math.min(dur, v.t + 0.25);
+  if (v.t >= dur) { v.playing = false; v.ended = true; render(); return; }
+  app.querySelectorAll('[data-vprog]').forEach(el => { el.style.width = (v.t / dur) * 100 + '%'; });
+  app.querySelectorAll('[data-vtime]').forEach(el => { el.textContent = mmss(v.t); });
+}, 250);
+
+function lerHash() {
+  const m = (location.hash || '').match(/^#variante-([abc])$/i);
+  if (m) S.variante = m[1].toUpperCase();
+}
+window.addEventListener('hashchange', () => { lerHash(); render(); });
+lerHash();
+render();
+</script>

@@ -1,0 +1,8 @@
+{
+  "name": "Controle da Reunião",
+  "short_name": "Reunião",
+  "display": "standalone",
+  "background_color": "#e9eef4",
+  "theme_color": "#1f4d9c",
+  "icons": [{ "src": "/comum/icone.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

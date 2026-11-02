@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Auxílio Reunião</title>
+<link rel="stylesheet" href="/comum/base.css">
+<style>
+  body { padding: 24px 28px; }
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 28px; align-items: start; max-width: 1240px; margin: 0 auto; }
+  h1 { margin: 0 0 4px; font-size: 28px; }
+  h2 { margin: 0; font-size: 21px; }
+  .col { display: grid; gap: 18px; min-width: 0; }
+  .caixa { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; display: grid; gap: 12px; }
+  .conectar { grid-template-columns: 220px minmax(0, 1fr); align-items: center; gap: 20px; }
+  .qr { background: #fff; padding: 10px; border-radius: 10px; width: 220px; }
+  .qr svg { display: block; width: 100%; height: auto; }
+  .url { font-family: Consolas, monospace; font-size: 14px; color: var(--muted); overflow-wrap: anywhere; user-select: all; }
+  .status { display: flex; gap: 10px; flex-wrap: wrap; }
+  .pill { padding: 6px 12px; border-radius: 99px; font-weight: 700; font-size: 15px; border: 2px solid var(--line); }
+  .pill.ok { border-color: var(--live); background: var(--live-bg); color: var(--live); }
+  .pill.atencao { border-color: var(--warn); background: var(--warn-bg); color: var(--warn); }
+  .reunioes { display: grid; gap: 8px; }
+  .reuniao { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; }
+  .reuniao .n { font-weight: 700; }
+  .reuniao .d { color: var(--muted); font-size: 15px; }
+  .reuniao .btn { min-height: 48px; font-size: 16px; }
+  .acoes { display: flex; gap: 10px; flex-wrap: wrap; }
+  .controle-reserva { display: grid; gap: 8px; position: sticky; top: 24px; }
+  .controle-reserva iframe { width: 400px; height: calc(100vh - 110px); max-height: 820px; border: 8px solid #1b2633; border-radius: 28px; background: var(--bg); }
+  #msg { min-height: 1.4em; }
+</style>
+</head>
+<body>
+  <div class="layout">
+    <div class="col">
+      <div>
+        <h1>Auxílio Reunião</h1>
+        <p class="note">Deixe este programa aberto. O pastor conduz a reunião pelo celular.</p>
+      </div>
+
+      <section class="caixa conectar">
+        <div class="qr" id="qr" aria-label="QR code para conectar o celular"></div>
+        <div style="display:grid; gap:10px; min-width:0">
+          <h2>Conectar o celular</h2>
+          <p class="note">No celular: abra a câmera, aponte para o QR code e toque no link. Depois, use "Adicionar à tela inicial" para não precisar ler de novo.</p>
+          <div class="url" id="url"></div>
+          <div class="status" id="status"></div>
+          <div><button class="btn" id="atualizar" style="min-height:44px;font-size:15px">Atualizar endereço</button></div>
+        </div>
+      </section>
+
+      <section class="caixa">
+        <h2>Reuniões</h2>
+        <div class="reunioes" id="reunioes"></div>
+        <div class="acoes">
+          <button class="btn primary" id="criar">+ Criar reunião de teste com imagens e vídeos</button>
+        </div>
+        <p class="note" id="msg"></p>
+      </section>
+
+      <section class="caixa">
+        <h2>Tela de espera</h2>
+        <p class="note">A imagem que aparece na TV antes e depois da reunião.</p>
+        <div class="acoes"><button class="btn" id="espera">Trocar imagem</button></div>
+      </section>
+    </div>
+
+    <aside class="controle-reserva">
+      <div class="eyebrow">Controle de reserva (se o celular falhar)</div>
+      <iframe id="reserva" title="Controle de reserva"></iframe>
+    </aside>
+  </div>
+
+  <script src="/comum/conexao.js"></script>
+  <script src="painel.js"></script>
+</body>
+</html>

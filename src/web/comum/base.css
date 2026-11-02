@@ -1,0 +1,50 @@
+@font-face { font-family: "Atkinson Hyperlegible"; font-weight: 400; font-display: swap; src: url("/fontes/atkinson-hyperlegible-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "Atkinson Hyperlegible"; font-weight: 700; font-display: swap; src: url("/fontes/atkinson-hyperlegible-latin-700-normal.woff2") format("woff2"); }
+
+:root {
+  --bg: #e9eef4;
+  --surface: #ffffff;
+  --surface-2: #f3f6fa;
+  --ink: #132030;
+  --muted: #4b596a;
+  --line: #c3cedb;
+  --accent: #1f4d9c;
+  --on-accent: #ffffff;
+  --live: #17803f;
+  --live-bg: #def3e6;
+  --warn: #8a5a00;
+  --warn-bg: #fff1cc;
+  --danger: #a8231b;
+  --danger-bg: #fbe4e1;
+  --font-ui: "Atkinson Hyperlegible", "Segoe UI", Roboto, Arial, sans-serif;
+  --radius: 14px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d131a; --surface: #17212d; --surface-2: #1d2936; --ink: #eef3f8; --muted: #a9b6c4;
+    --line: #2f3e4f; --accent: #8db4ff; --on-accent: #0b1424; --live: #4cc77c; --live-bg: #12321f;
+    --warn: #ffd27a; --warn-bg: #3a2c0c; --danger: #ff8f84; --danger-bg: #3a1714;
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); font-size: 18px; line-height: 1.35; }
+button { font: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+button:disabled { opacity: .45; cursor: default; }
+[hidden] { display: none !important; }
+
+.btn {
+  min-height: 64px; border-radius: var(--radius); border: 2px solid var(--line);
+  background: var(--surface); padding: 10px 14px; font-size: 19px; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; text-align: center;
+}
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn.danger { border-color: var(--danger); color: var(--danger); background: var(--danger-bg); }
+.btn.live { border-color: var(--live); color: var(--live); background: var(--live-bg); }
+.btn.huge { min-height: 96px; font-size: 26px; }
+.eyebrow { font-size: 14px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.note { color: var(--muted); font-size: 15px; margin: 0; }

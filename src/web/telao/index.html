@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Telão</title>
+<link rel="stylesheet" href="/comum/base.css">
+<style>
+  /* O Telão nunca mostra o computador: fundo sempre preto, sem cursor, sem barras. */
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #000; cursor: none; }
+  .camada { position: absolute; inset: 0; opacity: 0; transition: opacity .25s ease; display: grid; place-items: center; }
+  .camada.visivel { opacity: 1; }
+  .camada img, .camada video { width: 100%; height: 100%; object-fit: contain; background: #000; }
+  #espera-padrao {
+    width: 100%; height: 100%; display: grid; place-content: center; text-align: center; gap: 2vw; color: #fff;
+    background: radial-gradient(120% 90% at 50% 10%, #2a4f86 0%, #0f1d33 70%);
+  }
+  #espera-padrao .h { font-size: 7vw; font-weight: 700; }
+  #espera-padrao .s { font-size: 2vw; color: rgba(255,255,255,.7); }
+  @media (prefers-reduced-motion: reduce) { .camada { transition: none; } }
+</style>
+</head>
+<body>
+  <div class="camada" id="c-espera">
+    <div id="espera-padrao"><div class="h">Seja bem-vindo</div><div class="s">Escolha a imagem desta tela no notebook</div></div>
+    <img id="espera-img" alt="" hidden>
+  </div>
+  <div class="camada" id="c-imagem"><img id="img" alt=""></div>
+  <div class="camada" id="c-video"><video id="video" playsinline preload="auto"></video></div>
+  <script src="/comum/conexao.js"></script>
+  <script src="telao.js"></script>
+</body>
+</html>
