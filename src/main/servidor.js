@@ -68,6 +68,7 @@ function criarServidor({ dados }) {
   const token = dados.config.token;
   let estado = estadoInicial();
   let tvStatus = 'procurando';
+  let telas = 1;
   let qrSvg = '';
   let url = '';
 
@@ -75,6 +76,8 @@ function criarServidor({ dados }) {
     reuniaoExiste: id => !!dados.reuniao(id),
     item: (rid, iid) => dados.item(rid, iid),
   };
+  // Itens apagados ou fora de ordem durante a reunião não quebram nada:
+  // o Telão continua mostrando o que estava até o pastor tocar em outro cartão.
 
   const server = http.createServer((req, res) => {
     const u = new URL(req.url, 'http://x');
@@ -106,27 +109,60 @@ function criarServidor({ dados }) {
     return n;
   }
 
-  function pacote() {
-    return JSON.stringify({
+  function pacote(completo) {
+    const base = {
       tipo: 'estado',
       estado,
-      reunioes: dados.reunioes.map(r => ({ id: r.id, nome: r.nome, data: r.data, hora: r.hora, qtd: r.itens.length })),
-      reuniao: estado.reuniaoId ? dados.reuniao(estado.reuniaoId) : null,
-      info: { url, qrSvg, tv: tvStatus, celulares: celularesConectados(), telaEspera: dados.config.telaEspera },
-    });
+      hoje: dados.hoje(),
+      reunioes: dados.resumoReunioes(),
+      reuniao: estado.reuniaoId ? dados.reuniaoCompleta(estado.reuniaoId) : null,
+      info: { url, qrSvg, tv: tvStatus, telas, celulares: celularesConectados(), telaEspera: dados.config.telaEspera },
+    };
+    if (completo) {
+      // Só o Painel precisa de tudo para preparar as reuniões.
+      base.pastores = dados.pastores;
+      base.biblioteca = dados.biblioteca.map(b => ({ ...b, usos: dados.usos(b.id) }));
+      base.antigos = dados.antigos().map(b => b.id);
+      base.reunioesCompletas = dados.reunioes.map(r => dados.reuniaoCompleta(r.id));
+    }
+    return JSON.stringify(base);
   }
 
   function transmitir() {
-    const msg = pacote();
-    for (const c of wss.clients) if (c.readyState === 1) c.send(msg);
+    let simples, completo;
+    for (const c of wss.clients) {
+      if (c.readyState !== 1) continue;
+      if (c.papel === 'painel') c.send(completo ??= pacote(true));
+      else c.send(simples ??= pacote(false));
+    }
   }
 
-  function executar(cmd, papel) {
+  // Comandos de preparação: só o Painel (notebook) pode mandar.
+  const PREPARO = {
+    salvarPastor: c => dados.salvarPastor(c),
+    removerPastor: c => dados.removerPastor(c.id),
+    criarReuniao: c => dados.criarReuniao(c),
+    editarReuniao: c => dados.editarReuniao(c.id, c.campos || {}),
+    removerReuniao: c => {
+      if (estado.reuniaoId === c.id) estado = estadoInicial(estado.volume);
+      dados.removerReuniao(c.id);
+    },
+    adicionarItens: c => dados.adicionarItens(c.reuniaoId, c.bibliotecaIds || []),
+    moverItem: c => dados.moverItem(c.reuniaoId, c.itemId, Number(c.delta)),
+    removerItem: c => dados.removerItem(c.reuniaoId, c.itemId),
+    renomearArquivo: c => dados.renomearArquivo(c.id, c.titulo),
+    removerDaBiblioteca: c => dados.removerDaBiblioteca(c.id),
+    apagarAntigos: () => dados.apagarAntigos(),
+  };
+
+  function executar(cmd, papel, ws) {
     if (cmd.cmd === 'videoProgresso' && papel !== 'telao') return;
-    if (cmd.cmd === 'removerReuniao') {
+    const preparo = PREPARO[cmd.cmd];
+    if (preparo) {
       if (papel !== 'painel') return;
-      if (estado.reuniaoId === cmd.id) estado = estadoInicial(estado.volume);
-      dados.removerReuniao(cmd.id);
+      let resposta = null;
+      try { resposta = preparo(cmd); } catch (e) { ws.send(JSON.stringify({ tipo: 'erro', mensagem: e.message })); return; }
+      if (cmd.pedido) ws.send(JSON.stringify({ tipo: 'resposta', pedido: cmd.pedido, resposta }));
       transmitir();
       return;
     }
@@ -144,7 +180,7 @@ function criarServidor({ dados }) {
     ws.on('message', raw => {
       let cmd;
       try { cmd = JSON.parse(raw); } catch { return; }
-      if (cmd && typeof cmd.cmd === 'string') executar(cmd, ws.papel);
+      if (cmd && typeof cmd.cmd === 'string') executar(cmd, ws.papel, ws);
     });
     ws.on('close', () => transmitir());
     transmitir();
@@ -175,7 +211,7 @@ function criarServidor({ dados }) {
     }),
     atualizarEndereco,
     transmitir,
-    definirTv(status) { tvStatus = status; transmitir(); },
+    definirTv(status, qtdTelas) { tvStatus = status; telas = qtdTelas || 1; transmitir(); },
     fechar() { wss.close(); server.close(); },
   };
 }

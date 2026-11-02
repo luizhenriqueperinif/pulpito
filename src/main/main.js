@@ -13,10 +13,35 @@ function urlLocal(pagina) {
   return `http://127.0.0.1:${servidor.porta}/${pagina}/?t=${servidor.token}`;
 }
 
-/** A TV é qualquer tela que não seja a do próprio notebook. */
+/**
+ * A TV é a tela escolhida no Painel ("Trocar TV ⇄ notebook").
+ * Sem escolha salva, é qualquer tela que não seja a principal do Windows.
+ */
 function telaDaTv() {
+  const telas = screen.getAllDisplays();
+  if (telas.length < 2) return null;
+  const escolhida = telas.find(d => d.id === dados.config.telaTv);
+  if (escolhida) return escolhida;
   const principal = screen.getPrimaryDisplay();
-  return screen.getAllDisplays().find(d => d.id !== principal.id) || null;
+  return telas.find(d => d.id !== principal.id);
+}
+
+/** O Painel fica numa tela que não seja a da TV. */
+function moverPainelParaFora(tv) {
+  if (!painel || !tv) return;
+  const destino = screen.getAllDisplays().find(d => d.id !== tv.id);
+  const atual = screen.getDisplayMatching(painel.getBounds());
+  if (!destino || atual.id !== tv.id) return;
+  const maximizado = painel.isMaximized();
+  if (maximizado) painel.unmaximize();
+  const a = destino.workArea;
+  const [w, h] = painel.getSize();
+  painel.setBounds({
+    x: a.x + Math.max(0, Math.round((a.width - w) / 2)),
+    y: a.y + Math.max(0, Math.round((a.height - h) / 2)),
+    width: Math.min(w, a.width), height: Math.min(h, a.height),
+  });
+  if (maximizado) painel.maximize();
 }
 
 function abrirTelao() {
@@ -42,7 +67,8 @@ function abrirTelao() {
   telao.once('ready-to-show', () => { telao.showInactive(); if (tv) telao.setFullScreen(true); });
   telao.loadURL(urlLocal('telao'));
   telao.on('closed', () => { telao = null; });
-  servidor.definirTv(tv ? 'tv' : 'janela');
+  moverPainelParaFora(tv);
+  servidor.definirTv(tv ? 'tv' : 'janela', screen.getAllDisplays().length);
 }
 
 function abrirPainel() {
@@ -70,17 +96,27 @@ function telasMudaram() {
   reabrirTimer = setTimeout(abrirTelao, 1500);
 }
 
-ipcMain.handle('criar-reuniao-teste', async () => {
+/** Copia os arquivos para a Biblioteca e, se veio uma reunião, coloca no fim dela. */
+function importar(caminhos, reuniaoId) {
+  const { novos, ignorados } = dados.importarArquivos(caminhos);
+  if (reuniaoId && novos.length) dados.adicionarItens(reuniaoId, novos.map(b => b.id));
+  servidor.transmitir();
+  return { qtd: novos.length, ignorados };
+}
+
+ipcMain.handle('importar-dialogo', async (_e, { reuniaoId } = {}) => {
   const r = await dialog.showOpenDialog(painel, {
-    title: 'Escolha as imagens e vídeos da reunião de teste',
+    title: 'Escolha as fotos e vídeos',
     properties: ['openFile', 'multiSelections'],
-    filters: [{ name: 'Imagens e vídeos', extensions: [...EXT_IMAGEM, ...EXT_VIDEO] }],
+    filters: [{ name: 'Fotos e vídeos', extensions: [...EXT_IMAGEM, ...EXT_VIDEO] }],
   });
   if (r.canceled || r.filePaths.length === 0) return null;
-  const qtd = dados.reunioes.length + 1;
-  const res = dados.criarReuniao(`Reunião de teste ${qtd}`, r.filePaths);
-  servidor.transmitir();
-  return { itens: res.reuniao.itens.length, ignorados: res.ignorados };
+  return importar(r.filePaths, reuniaoId);
+});
+
+ipcMain.handle('importar-caminhos', (_e, { caminhos, reuniaoId } = {}) => {
+  if (!Array.isArray(caminhos) || caminhos.length === 0) return null;
+  return importar(caminhos.filter(c => typeof c === 'string'), reuniaoId);
 });
 
 ipcMain.handle('trocar-tela-espera', async () => {
@@ -96,6 +132,18 @@ ipcMain.handle('trocar-tela-espera', async () => {
 });
 
 ipcMain.handle('atualizar-endereco', () => servidor.atualizarEndereco());
+
+ipcMain.handle('trocar-telas', () => {
+  const telas = screen.getAllDisplays();
+  const tv = telaDaTv();
+  if (!tv) return false;
+  // Passa a TV para a próxima tela (com 2 telas, simplesmente inverte).
+  const proxima = telas[(telas.findIndex(d => d.id === tv.id) + 1) % telas.length];
+  dados.config.telaTv = proxima.id;
+  dados.salvar();
+  abrirTelao();
+  return true;
+});
 
 app.on('second-instance', () => { if (painel) { if (painel.isMinimized()) painel.restore(); painel.focus(); } });
 

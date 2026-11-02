@@ -8,6 +8,7 @@
   let dados = null;            // último pacote recebido do Notebook
   let con = { conectado: false };
   let confirmarEncerrar = false;
+  let verOutras = false;
   let chaveTela = '';          // para não redesenhar tudo só porque o tempo do vídeo andou
 
   const conexao = window.Auxilio.conectar({
@@ -85,15 +86,29 @@
       ${naTv ? '<span class="chip">NA TV</span>' : ''}</button>`;
   }
 
+  const diaSemana = d => { const [a, m, dd] = d.split('-').map(Number); return new Date(a, m - 1, dd).toLocaleDateString('pt-BR', { weekday: 'long' }); };
+  const tituloReuniao = r => r.nome || `Reunião de ${diaSemana(r.data)}`;
+
+  function botaoReuniao(r, mostrarDia) {
+    const dia = mostrarDia ? `${diaSemana(r.data)} ${r.data.split('-').reverse().slice(0, 2).join('/')} · ` : '';
+    return `<button class="reuniao-btn" data-cmd="escolherReuniao" data-id="${r.id}">
+      <span class="hora">${esc(r.hora)}</span><span class="p">${r.pastor ? esc(r.pastor) : esc(tituloReuniao(r))}</span>
+      <span class="v">${esc(dia)}${r.pastor ? esc(tituloReuniao(r)) + ' · ' : ''}${r.qtd} ${r.qtd === 1 ? 'item' : 'itens'}</span></button>`;
+  }
+
   function telaEscolher() {
-    const lista = dados.reunioes;
+    const deHoje = dados.reunioes.filter(r => r.data === dados.hoje);
+    const outras = dados.reunioes.filter(r => r.data !== dados.hoje);
     return `<div class="pad escolher">
       ${avisoConexao()}
-      <div class="eyebrow">Auxílio Reunião</div>
+      <div class="eyebrow">Hoje · ${esc(diaSemana(dados.hoje))}</div>
       <h1>Qual reunião vai começar?</h1>
-      ${lista.length ? lista.map(r => `<button class="reuniao-btn" data-cmd="escolherReuniao" data-id="${r.id}">
-          <span class="hora">${esc(r.hora)}</span><span class="p">${esc(r.nome)}</span><span class="v">${r.qtd} ${r.qtd === 1 ? 'item' : 'itens'}</span></button>`).join('')
-        : '<p class="note">Nenhuma reunião preparada ainda. Prepare a reunião no notebook.</p>'}
+      ${deHoje.length ? deHoje.map(r => botaoReuniao(r)).join('')
+        : '<p class="note">Nenhuma reunião marcada para hoje. Prepare a reunião no notebook.</p>'}
+      ${outras.length ? (verOutras
+        ? `<div class="eyebrow">Outros dias</div>${outras.map(r => botaoReuniao(r, true)).join('')}
+           <button class="btn" data-acao="outras">Esconder outros dias</button>`
+        : `<button class="btn" data-acao="outras">Ver reuniões de outros dias</button>`) : ''}
     </div>`;
   }
 
@@ -101,7 +116,7 @@
     const r = dados.reuniao, e = dados.estado;
     return `<div class="pad">
       ${avisoConexao()}
-      <div class="top"><div class="nome">${esc(r.nome)}</div><div class="quem">${r.itens.length} itens</div></div>
+      <div class="top"><div class="nome">${esc(tituloReuniao(r))} · ${esc(r.hora)}</div><div class="quem">${r.pastor ? esc(r.pastor) + ' · ' : ''}${r.itens.length} itens</div></div>
       <div class="mini"><div class="eyebrow">Na TV agora</div>${miniTv()}<div class="cap">${esc(rotuloTv())}</div></div>
       ${painelVideo()}
       <div class="eyebrow">Toque para mostrar na TV</div>
@@ -155,6 +170,7 @@
     const acao = el.dataset.acao;
     if (acao === 'encerrar') { confirmarEncerrar = true; desenhar(true); return; }
     if (acao === 'cancelar') { confirmarEncerrar = false; desenhar(true); return; }
+    if (acao === 'outras') { verOutras = !verOutras; desenhar(true); return; }
     const cmd = el.dataset.cmd;
     if (cmd === 'encerrar') { confirmarEncerrar = false; }
     if (cmd === 'mostrar') enviar({ cmd, itemId: el.dataset.item });
