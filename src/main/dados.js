@@ -7,6 +7,7 @@ const biblia = require('./biblia');
 
 const EXT_IMAGEM = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp'];
 const EXT_VIDEO = ['mp4', 'm4v', 'mov', 'webm', 'mkv'];
+const EXT_AUDIO = ['mp3', 'm4a', 'aac', 'wav', 'ogg', 'oga', 'opus', 'flac'];
 /** Tipos que "Copiar reunião" leva junto (fotos e vídeos são da semana e não vêm). */
 const TIPOS_QUE_SE_REPETEM = ['musica', 'palavra'];
 /** Tipos que "Apagar antigos" pode limpar. Músicas e Fundos nunca são apagados por ele. */
@@ -21,6 +22,7 @@ function tipoDoArquivo(nome) {
   const ext = path.extname(nome).slice(1).toLowerCase();
   if (EXT_IMAGEM.includes(ext)) return 'imagem';
   if (EXT_VIDEO.includes(ext)) return 'video';
+  if (EXT_AUDIO.includes(ext)) return 'musica';
   return null;
 }
 
@@ -148,6 +150,34 @@ class Dados {
     return { novos, ignorados: caminhos.length - aceitos.length };
   }
 
+  /**
+   * Pregação: várias imagens (as que o bispo mandou) guardadas juntas, na ordem do nome.
+   * Fica na Biblioteca como uma coisa só.
+   */
+  criarPregacao(caminhos, { titulo } = {}) {
+    const imagens = caminhos
+      .filter(c => tipoDoArquivo(c) === 'imagem')
+      .sort((a, b) => path.basename(a).localeCompare(path.basename(b), 'pt-BR', { numeric: true }));
+    if (!imagens.length) return null;
+    const arquivos = imagens.map(c => {
+      const nome = id() + path.extname(c).toLowerCase();
+      fs.copyFileSync(c, path.join(this.pastaMidia, nome));
+      return nome;
+    });
+    const hoje = this.hoje();
+    const b = {
+      id: id(),
+      tipo: 'pregacao',
+      titulo: String(titulo || '').trim() || `Pregação de ${hoje.slice(8, 10)}/${hoje.slice(5, 7)}`,
+      arquivo: arquivos[0],
+      arquivos,
+      criadoEm: hoje,
+    };
+    this.d.biblioteca.push(b);
+    this.salvar();
+    return { pregacao: b, ignorados: caminhos.length - imagens.length };
+  }
+
   renomearArquivo(bid, titulo) {
     const b = this.arquivoDaBiblioteca(bid);
     titulo = String(titulo || '').trim();
@@ -170,7 +200,7 @@ class Dados {
       r.itens = r.itens.filter(i => i.bibliotecaId !== bid);
       if (r.fundo === bid) r.fundo = null;
     }
-    fs.rmSync(path.join(this.pastaMidia, b.arquivo), { force: true });
+    for (const a of b.arquivos || [b.arquivo]) fs.rmSync(path.join(this.pastaMidia, a), { force: true });
     this.salvar();
   }
 
@@ -333,7 +363,10 @@ class Dados {
       return { id: it.id, tipo: 'palavra', titulo: 'Palavra', passagens };
     }
     const b = this.arquivoDaBiblioteca(it.bibliotecaId);
-    return b ? { id: it.id, bibliotecaId: b.id, tipo: b.tipo, titulo: b.titulo, arquivo: b.arquivo } : null;
+    if (!b) return null;
+    const r = { id: it.id, bibliotecaId: b.id, tipo: b.tipo, titulo: b.titulo, arquivo: b.arquivo };
+    if (b.arquivos) r.arquivos = [...b.arquivos];
+    return r;
   }
 
   /** Reunião pronta para as telas: com o pastor, a versão, o fundo e os itens resolvidos. */
@@ -426,4 +459,4 @@ function migrarDaVersao1(v1) {
   };
 }
 
-module.exports = { Dados, tipoDoArquivo, tituloDoArquivo, somarDias, dataLocal, EXT_IMAGEM, EXT_VIDEO, VERSOES, FUNDOS_PRONTOS };
+module.exports = { Dados, tipoDoArquivo, tituloDoArquivo, somarDias, dataLocal, EXT_IMAGEM, EXT_VIDEO, EXT_AUDIO, VERSOES, FUNDOS_PRONTOS };

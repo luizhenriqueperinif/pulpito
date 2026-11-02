@@ -22,6 +22,8 @@ const TIPOS = {
   '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml',
   '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif', '.bmp': 'image/bmp',
   '.mp4': 'video/mp4', '.m4v': 'video/mp4', '.mov': 'video/quicktime', '.webm': 'video/webm', '.mkv': 'video/x-matroska',
+  '.mp3': 'audio/mpeg', '.m4a': 'audio/mp4', '.aac': 'audio/aac', '.wav': 'audio/wav', '.ogg': 'audio/ogg', '.oga': 'audio/ogg',
+  '.opus': 'audio/ogg', '.flac': 'audio/flac',
   '.woff2': 'font/woff2',
 };
 
@@ -94,10 +96,17 @@ function criarServidor({ dados }) {
   const ctx = {
     reuniaoExiste: id => !!dados.reuniao(id),
     item: (rid, iid) => dados.item(rid, iid),
+    musica: bid => { const b = dados.arquivoDaBiblioteca(bid); return b && b.tipo === 'musica' ? b : undefined; },
     versao: versaoDe,
     existe: (v, r) => biblia.existe(v, r),
     vizinho: (v, r, d) => biblia.vizinho(v, r, d),
   };
+
+  /** A música que está tocando (ou parada no fim), com o arquivo para o Telão. */
+  function musicaTocando() {
+    const b = estado.audio && dados.arquivoDaBiblioteca(estado.audio.bibliotecaId);
+    return b ? { titulo: b.titulo, arquivo: b.arquivo } : null;
+  }
 
   /** Capítulo antes/depois (passa para o livro vizinho no fim do livro). */
   function capituloVizinho(versao, ref, delta) {
@@ -192,6 +201,8 @@ function criarServidor({ dados }) {
       reunioes: dados.resumoReunioes(),
       reuniao,
       versiculo: versiculoNaTv(reuniao),
+      musica: musicaTocando(),
+      musicas: dados.biblioteca.filter(b => b.tipo === 'musica').map(b => ({ id: b.id, titulo: b.titulo })),
       recentes: dados.recentes(reuniao?.pastorId).map(r => ({ ...r, rotulo: biblia.rotulo(r) })),
       info: { inicio: INICIO, url, qrSvg, tv: tvStatus, telas, celulares: celularesConectados(), telaEspera: dados.config.telaEspera },
     };
@@ -236,7 +247,7 @@ function criarServidor({ dados }) {
   };
 
   function executar(cmd, papel, ws) {
-    if (cmd.cmd === 'videoProgresso' && papel !== 'telao') return;
+    if ((cmd.cmd === 'videoProgresso' || cmd.cmd === 'audioProgresso') && papel !== 'telao') return;
     const preparo = PREPARO[cmd.cmd];
     if (preparo) {
       if (papel !== 'painel') return;

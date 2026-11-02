@@ -4,6 +4,8 @@
   const camadas = { espera: $('c-espera'), imagem: $('c-imagem'), video: $('c-video'), versiculo: $('c-versiculo') };
   const img = $('img');
   const video = $('video');
+  const audio = $('audio');
+  let atualAudio = { arquivo: null, inicio: null };
   let conexao;
   let atual = { camada: null, arquivo: null, inicio: null };
 
@@ -40,6 +42,8 @@
     }
 
     video.volume = Math.max(0, Math.min(1, estado.volume / 10));
+    audio.volume = video.volume;
+    aplicarAudio(estado.audio, msg.musica);
 
     if (estado.tv.tipo === 'espera') { pararVideo(); mostrarCamada('espera'); return; }
     if (estado.tv.tipo === 'preto') { video.pause(); mostrarCamada(null); return; }
@@ -53,9 +57,12 @@
     const it = reuniao && reuniao.itens.find(i => i.id === estado.tv.itemId);
     if (!it) return;
 
-    if (it.tipo === 'imagem') {
+    if (it.tipo === 'imagem' || it.tipo === 'pregacao') {
       pararVideo();
-      const src = conexao.midia(it.arquivo);
+      const arq = it.tipo === 'pregacao' ? it.arquivos[estado.tv.slide] || it.arquivos[0] : it.arquivo;
+      const src = conexao.midia(arq);
+      // Pregação: já deixa a próxima imagem carregada, para trocar na hora.
+      if (it.tipo === 'pregacao' && it.arquivos[estado.tv.slide + 1]) new Image().src = conexao.midia(it.arquivos[estado.tv.slide + 1]);
       if (atual.arquivo === src && atual.camada === 'imagem') return;
       atual.arquivo = src;
       // Só troca quando a nova imagem já carregou, para não piscar.
@@ -81,6 +88,33 @@
       if (!v.tocando && !video.paused) video.pause();
     }
   }
+
+  function aplicarAudio(a, musica) {
+    if (!a || !musica) {
+      if (!audio.paused) audio.pause();
+      atualAudio = { arquivo: null, inicio: null };
+      return;
+    }
+    const src = conexao.midia(musica.arquivo);
+    if (atualAudio.arquivo !== src || atualAudio.inicio !== a.inicio) {
+      atualAudio = { arquivo: src, inicio: a.inicio };
+      if (audio.dataset.src !== src) { audio.src = src; audio.dataset.src = src; }
+      try { audio.currentTime = 0; } catch (e) {}
+    }
+    if (a.tocando && audio.paused && !audio.ended) audio.play().catch(() => {});
+    if (!a.tocando && !audio.paused) audio.pause();
+  }
+
+  let ultimoAudio = 0;
+  function progressoAudio(terminou) {
+    if (atualAudio.inicio == null) return;
+    const agora = Date.now();
+    if (!terminou && agora - ultimoAudio < 1000) return;
+    ultimoAudio = agora;
+    conexao.enviar({ cmd: 'audioProgresso', inicio: atualAudio.inicio, t: audio.currentTime, dur: audio.duration || 0, terminou });
+  }
+  audio.addEventListener('timeupdate', () => progressoAudio(false));
+  audio.addEventListener('ended', () => progressoAudio(true));
 
   function pararVideo() {
     if (!video.paused) video.pause();

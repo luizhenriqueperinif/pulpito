@@ -21,7 +21,8 @@ npm test
 
 ## Etapas
 
-1. **Esqueleto (atual):** TV + celular + reunião de teste com imagens e vídeos, apagar TV, volume, encerrar.
+1. **Esqueleto:** TV + celular + reunião de teste com imagens e vídeos, apagar TV, volume, encerrar.
 2. Preparar a reunião no notebook (pastores, biblioteca, ordem, copiar reunião).
 3. Bíblia ACF/NVI, versículos planejados e avulsos, fundos.
-4. Músicas, pregação, envio pelo celular, limpeza, iniciar com o Windows, instalador.
+4. **Pregação e Músicas (atual):** pregação com várias imagens e ◀ ▶, músicas da reunião e música avulsa pelo celular.
+5. Envio de arquivos pelo celular, iniciar com o Windows, esconder notificações, instalador.

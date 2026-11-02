@@ -117,3 +117,15 @@ body { min-height: 100vh; min-height: 100dvh; }
 .capbar .btn.atual small { color: var(--muted); font-weight: 400; }
 /* Cada parte do painel mantém a própria altura (a mini TV não encolhe nem fica por cima dos botões). */
 .painel-corpo > * { flex-shrink: 0; }
+
+/* Música e Pregação */
+.media.musica { border-color: var(--accent); }
+.card.pregacao .ic img { object-fit: cover; }
+.capbar .contador { display: grid; place-content: center; text-align: center; border-radius: var(--radius); border: 2px solid var(--line); background: var(--surface); line-height: 1.1; }
+.capbar .contador b { font-size: 30px; }
+.capbar .contador small { font-size: 15px; color: var(--muted); }
+.slides { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.slide { position: relative; padding: 0; border: 3px solid var(--line); border-radius: 8px; overflow: hidden; background: #000; aspect-ratio: 16 / 9; }
+.slide img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.slide span { position: absolute; left: 4px; top: 4px; background: rgba(0,0,0,.7); color: #fff; font-weight: 700; font-size: 14px; padding: 1px 7px; border-radius: 99px; }
+.slide.on { border-color: var(--live); box-shadow: 0 0 0 2px var(--live); }

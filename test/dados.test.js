@@ -19,6 +19,7 @@ function novo(hoje = '2026-11-08') {
 test('reconhece imagens e vídeos pelo nome do arquivo', () => {
   assert.equal(tipoDoArquivo('IMG-20261102-WA0001.jpg'), 'imagem');
   assert.equal(tipoDoArquivo('VID-20261102-WA0003.MP4'), 'video');
+  assert.equal(tipoDoArquivo('Hino 15.mp3'), 'musica');
   assert.equal(tipoDoArquivo('documento.pdf'), null);
 });
 
@@ -251,4 +252,38 @@ test('últimos versículos usados: por pastor, sem repetir, no máximo 6', () =>
   assert.deepEqual(d.recentes('p2'), []);
   d.lembrarVersiculo(null, { l: 0, c: 1, v: 1 });
   assert.equal(d.recentes(null).length, 1);
+});
+
+test('pregação: várias imagens viram uma coisa só, na ordem do nome', () => {
+  const d = novo('2026-11-08');
+  const { pregacao, ignorados } = d.criarPregacao(arquivos('IMG-WA0012.jpg', 'IMG-WA0003.jpg', 'audio.mp3'));
+  assert.equal(ignorados, 1);
+  assert.equal(pregacao.tipo, 'pregacao');
+  assert.equal(pregacao.titulo, 'Pregação de 08/11');
+  assert.equal(pregacao.arquivos.length, 2);
+  assert.equal(d.biblioteca.length, 1);
+  const r = d.criarReuniao({});
+  d.adicionarItens(r.id, [pregacao.id]);
+  assert.equal(d.reuniaoCompleta(r.id).itens[0].arquivos.length, 2);
+  const caminhos = pregacao.arquivos.map(a => path.join(d.pastaMidia, a));
+  d.removerDaBiblioteca(pregacao.id);
+  assert.ok(caminhos.every(c => !fs.existsSync(c)), 'apaga todas as imagens');
+  assert.equal(d.criarPregacao(arquivos('a.mp3')), null);
+});
+
+test('músicas vão junto ao copiar a reunião; fotos não', () => {
+  const d = novo();
+  const { novos } = d.importarArquivos(arquivos('Hino.mp3', 'foto.png'));
+  const r1 = d.criarReuniao({});
+  d.adicionarItens(r1.id, novos.map(b => b.id));
+  const r2 = d.criarReuniao({ copiarDe: r1.id });
+  assert.deepEqual(d.reuniaoCompleta(r2.id).itens.map(i => i.tipo), ['musica']);
+});
+
+test('músicas nunca são apagadas por "Apagar antigos"; pregações sim', () => {
+  const d = new Dados(pastaTemp(), { hoje: () => '2026-01-01' });
+  d.importarArquivos(arquivos('Hino.mp3'));
+  d.criarPregacao(arquivos('a.jpg'));
+  d.hoje = () => '2026-12-31';
+  assert.deepEqual(d.antigos().map(b => b.tipo), ['pregacao']);
 });

@@ -2,7 +2,7 @@
 const { app, BrowserWindow, screen, dialog, ipcMain, powerSaveBlocker } = require('electron');
 const path = require('path');
 const { execFile } = require('child_process');
-const { Dados, EXT_IMAGEM, EXT_VIDEO } = require('./dados');
+const { Dados, EXT_IMAGEM, EXT_VIDEO, EXT_AUDIO } = require('./dados');
 const { criarServidor } = require('./servidor');
 
 if (!app.requestSingleInstanceLock()) { app.quit(); }
@@ -107,9 +107,27 @@ function importar(caminhos, reuniaoId, comoFundo) {
 ipcMain.handle('importar-dialogo', async (_e, { reuniaoId, comoFundo } = {}) => {
   const r = await dialog.showOpenDialog(painel, comoFundo
     ? { title: 'Escolha as imagens de fundo', properties: ['openFile', 'multiSelections'], filters: [{ name: 'Imagens', extensions: EXT_IMAGEM }] }
-    : { title: 'Escolha as fotos e vídeos', properties: ['openFile', 'multiSelections'], filters: [{ name: 'Fotos e vídeos', extensions: [...EXT_IMAGEM, ...EXT_VIDEO] }] });
+    : { title: 'Escolha as fotos, vídeos e músicas', properties: ['openFile', 'multiSelections'], filters: [{ name: 'Fotos, vídeos e músicas', extensions: [...EXT_IMAGEM, ...EXT_VIDEO, ...EXT_AUDIO] }] });
   if (r.canceled || r.filePaths.length === 0) return null;
   return importar(r.filePaths, reuniaoId, comoFundo);
+});
+
+/** Pregação: o pastor escolhe todas as imagens do bispo de uma vez; viram um item só. */
+ipcMain.handle('importar-pregacao', async (_e, { reuniaoId, caminhos } = {}) => {
+  if (!Array.isArray(caminhos)) {
+    const r = await dialog.showOpenDialog(painel, {
+      title: 'Escolha TODAS as imagens da pregação (segure Ctrl ou arraste para marcar várias)',
+      properties: ['openFile', 'multiSelections'],
+      filters: [{ name: 'Imagens', extensions: EXT_IMAGEM }],
+    });
+    if (r.canceled || r.filePaths.length === 0) return null;
+    caminhos = r.filePaths;
+  }
+  const feito = dados.criarPregacao(caminhos.filter(c => typeof c === 'string'));
+  if (!feito) return { qtd: 0, ignorados: caminhos.length };
+  if (reuniaoId) dados.adicionarItens(reuniaoId, [feito.pregacao.id]);
+  servidor.transmitir();
+  return { qtd: 1, imagens: feito.pregacao.arquivos.length, ignorados: feito.ignorados, pregacao: true };
 });
 
 ipcMain.handle('importar-caminhos', (_e, { caminhos, reuniaoId, comoFundo } = {}) => {

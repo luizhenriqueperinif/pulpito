@@ -6,6 +6,10 @@ contextBridge.exposeInMainWorld('notebook', {
   /** Arquivos arrastados para a janela. */
   importarArquivos: (arquivos, reuniaoId, comoFundo) =>
     ipcRenderer.invoke('importar-caminhos', { caminhos: Array.from(arquivos, f => webUtils.getPathForFile(f)), reuniaoId, comoFundo }),
+  importarPregacao: reuniaoId => ipcRenderer.invoke('importar-pregacao', { reuniaoId }),
+  /** Imagens arrastadas para a aba Pregações: viram uma pregação só. */
+  importarPregacaoArquivos: arquivos =>
+    ipcRenderer.invoke('importar-pregacao', { caminhos: Array.from(arquivos, f => webUtils.getPathForFile(f)) }),
   trocarTelaEspera: () => ipcRenderer.invoke('trocar-tela-espera'),
   atualizarEndereco: () => ipcRenderer.invoke('atualizar-endereco'),
   trocarTelas: () => ipcRenderer.invoke('trocar-telas'),

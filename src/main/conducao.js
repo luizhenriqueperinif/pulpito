@@ -5,7 +5,7 @@
 const VOLUME_MAX = 10;
 
 function estadoInicial(volume = 7) {
-  return { reuniaoId: null, tv: { tipo: 'espera' }, tvAntesPreto: null, tvAntesAvulso: null, video: null, volume };
+  return { reuniaoId: null, tv: { tipo: 'espera' }, tvAntesPreto: null, tvAntesAvulso: null, video: null, audio: null, volume };
 }
 
 const refValida = r => r && Number.isInteger(r.l) && Number.isInteger(r.c) && Number.isInteger(r.v);
@@ -15,6 +15,7 @@ const refValida = r => r && Number.isInteger(r.l) && Number.isInteger(r.c) && Nu
  * @param {object} cmd  { cmd: string, ... }
  * @param {{
  *   item(reuniaoId, itemId): object|undefined,
+ *   musica(bibliotecaId): object|undefined,   música da Biblioteca (para tocar avulsa)
  *   reuniaoExiste(id): boolean,
  *   versao(e): string,                       versão da Bíblia do que está na TV
  *   existe(versao, ref): boolean,
@@ -31,6 +32,11 @@ function aplicar(e, cmd, ctx) {
     case 'mostrar': {
       const it = e.reuniaoId && ctx.item(e.reuniaoId, cmd.itemId);
       if (!it) return e;
+      if (it.tipo === 'musica') {
+        // Música não tem imagem: a TV continua com o que estava. Tocar de novo na que já toca não recomeça.
+        if (e.audio && e.audio.itemId === it.id && !e.audio.terminou) return e;
+        return { ...e, audio: novoAudio(e, it.bibliotecaId, it.id), video: e.video ? { ...e.video, tocando: false } : null };
+      }
       const jaNaTv = e.tv.tipo === 'item' && e.tv.itemId === it.id;
       // Toque repetido no que já está na TV não faz nada (um vídeo não recomeça,
       // um versículo não volta para o começo).
@@ -43,11 +49,13 @@ function aplicar(e, cmd, ctx) {
         if (!p) return e;
         tv = { tipo: 'item', itemId: it.id, passagemId: p.id, ref: { ...p.ref } };
       }
+      if (it.tipo === 'pregacao') tv = { tipo: 'item', itemId: it.id, slide: 0 };
       return {
         ...e,
         tv,
         tvAntesPreto: null,
         tvAntesAvulso: null,
+        audio: null, // outra coisa foi para a TV: a música para
         video: it.tipo === 'video'
           ? { itemId: it.id, tocando: true, t: 0, dur: null, terminou: false, inicio }
           : null,
@@ -65,6 +73,7 @@ function aplicar(e, cmd, ctx) {
         tvAntesPreto: null,
         tvAntesAvulso: null,
         video: null,
+        audio: null,
       };
     }
 
@@ -107,6 +116,47 @@ function aplicar(e, cmd, ctx) {
     case 'voltarReuniao': {
       if (e.tv.tipo !== 'avulso') return e;
       return { ...e, tv: e.tvAntesAvulso ?? { tipo: 'espera' }, tvAntesAvulso: null };
+    }
+
+    case 'passoSlide':
+    case 'irSlide': {
+      // Pregação: ◀ ▶ ou tocar na miniatura. Para na primeira e na última imagem.
+      const it = e.tv.tipo === 'item' && ctx.item(e.reuniaoId, e.tv.itemId);
+      if (!it || it.tipo !== 'pregacao') return e;
+      const alvo = cmd.cmd === 'irSlide' ? Number(cmd.n) : e.tv.slide + (Number(cmd.delta) || 0);
+      if (!Number.isInteger(alvo) || alvo < 0 || alvo >= it.arquivos.length || alvo === e.tv.slide) return e;
+      return { ...e, tv: { ...e.tv, slide: alvo } };
+    }
+
+    case 'tocarMusica': {
+      // Música avulsa: qualquer música da Biblioteca, escolhida na hora.
+      const m = ctx.musica(cmd.bibliotecaId);
+      if (!m) return e;
+      if (e.audio && e.audio.bibliotecaId === m.id && !e.audio.itemId && !e.audio.terminou) return e;
+      return { ...e, audio: novoAudio(e, m.id, null), video: e.video ? { ...e.video, tocando: false } : null };
+    }
+
+    case 'audioPausar': {
+      if (!e.audio || !e.audio.tocando) return e;
+      return { ...e, audio: { ...e.audio, tocando: false } };
+    }
+
+    case 'audioContinuar': {
+      if (!e.audio || e.audio.tocando) return e;
+      if (e.audio.terminou) return { ...e, audio: { ...e.audio, tocando: true, terminou: false, t: 0, inicio: e.audio.inicio + 1 } };
+      return { ...e, audio: { ...e.audio, tocando: true } };
+    }
+
+    case 'audioParar':
+      return e.audio ? { ...e, audio: null } : e;
+
+    case 'audioProgresso': {
+      if (!e.audio || cmd.inicio !== e.audio.inicio) return e;
+      const terminou = !!cmd.terminou;
+      return {
+        ...e,
+        audio: { ...e.audio, t: Number(cmd.t) || 0, dur: Number(cmd.dur) || e.audio.dur, terminou, tocando: terminou ? false : e.audio.tocando },
+      };
     }
 
     case 'apagar': {
@@ -154,6 +204,10 @@ function aplicar(e, cmd, ctx) {
     default:
       return e;
   }
+}
+
+function novoAudio(e, bibliotecaId, itemId) {
+  return { bibliotecaId, itemId, tocando: true, t: 0, dur: null, terminou: false, inicio: (e.audio?.inicio ?? 0) + 1 };
 }
 
 module.exports = { estadoInicial, aplicar, VOLUME_MAX };

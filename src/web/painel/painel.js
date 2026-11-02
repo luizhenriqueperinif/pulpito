@@ -2,7 +2,7 @@
 (function () {
   const $ = id => document.getElementById(id);
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  const TIPO = { imagem: 'Imagem', video: 'Vídeo', palavra: 'Palavra', fundo: 'Fundo' };
+  const TIPO = { imagem: 'Imagem', video: 'Vídeo', palavra: 'Palavra', fundo: 'Fundo', musica: 'Música · toca sem mudar a TV', pregacao: 'Pregação' };
 
   let M = null;                 // último pacote do Notebook
   let chaveDados = '';
@@ -193,6 +193,8 @@
     if (it.tipo === 'palavra') return `<div class="miniatura" style='background:${fundoCss(reuniaoAberta()?.fundo)}'>📖</div>`;
     if (it.tipo === 'fundo') return `<div class="miniatura" style='background:${fundoCss({ arquivo: it.arquivo })}'></div>`;
     if (it.tipo === 'imagem') return `<div class="miniatura"><img src="${midia(it.arquivo)}" alt="" loading="lazy" draggable="false"></div>`;
+    if (it.tipo === 'musica') return `<div class="miniatura musica">🎵</div>`;
+    if (it.tipo === 'pregacao') return `<div class="miniatura"><img src="${midia(it.arquivo)}" alt="" loading="lazy" draggable="false"><span class="qtd">${it.arquivos.length}</span></div>`;
     if (it.tipo === 'video') return `<div class="miniatura"><video src="${midia(it.arquivo)}#t=1" preload="metadata" muted draggable="false"></video></div>`;
     return `<div class="miniatura">•</div>`;
   }
@@ -217,6 +219,7 @@
         <span class="n"><span class="alca" aria-hidden="true">⠿</span><span class="num">${i + 1}</span></span>${miniatura(it)}
         <div><div class="t">${it.tipo === 'palavra' ? '📖 Palavra' : esc(it.titulo)}</div><div class="d">${it.tipo === 'palavra'
           ? `${it.passagens.length} ${it.passagens.length === 1 ? 'passagem' : 'passagens'} · no celular é um cartão só, com as setas ◀ ▶`
+          : it.tipo === 'pregacao' ? `Pregação · ${it.arquivos.length} imagens · no celular passa com ◀ ▶`
           : TIPO[it.tipo] || it.tipo}${naTv === it.id ? ' · <span class="ao-vivo">na TV agora</span>' : ''}</div></div>
         <div class="acoes">
           <button class="btn" data-a="mover" data-v="${it.id}" data-d="-1" ${i === 0 ? 'disabled' : ''} aria-label="Subir">↑</button>
@@ -239,7 +242,8 @@
       ${r.itens.length ? `<div class="itens">${itens}</div>` : `<div class="vazio"><div class="grande">📭</div><div>Esta reunião ainda está vazia.</div></div>`}
       <div class="adicionar">
         <div class="acoes">
-          <button class="btn primary huge" data-a="importar">+ Fotos e vídeos do computador</button>
+          <button class="btn primary huge" data-a="importar">+ Fotos, vídeos e músicas</button>
+          <button class="btn primary huge" data-a="novaPregacao">📑 + Pregação</button>
           <button class="btn primary huge" data-a="abrirVerso">📖 + Versículo</button>
           <button class="btn huge" data-a="daBiblioteca">🗂️ Da Biblioteca</button>
         </div>
@@ -262,7 +266,7 @@
       : `<div class="t">${esc(b.titulo)}</div>`;
     const antigo = M.antigos.includes(b.id);
     return `<div class="arq">${thumb}
-      <div class="info">${nome}<div class="d">Adicionado em ${ddmm(b.criadoEm)} · ${b.usos ? `em ${b.usos} ${b.usos === 1 ? 'reunião' : 'reuniões'}` : 'não está em reunião'}${antigo ? ' · antigo' : ''}</div></div>
+      <div class="info">${nome}<div class="d">${b.arquivos ? `${b.arquivos.length} imagens · ` : ''}Adicionado em ${ddmm(b.criadoEm)} · ${b.usos ? `em ${b.usos} ${b.usos === 1 ? 'reunião' : 'reuniões'}` : 'não está em reunião'}${antigo ? ' · antigo' : ''}</div></div>
       <div class="acoes">
         ${S.renomear === b.id
           ? `<button class="btn primary" data-a="salvarNome" data-v="${b.id}">Salvar</button><button class="btn" data-a="cancelarNome">Cancelar</button>`
@@ -275,6 +279,8 @@
     return `<div class="sub-abas">
       <button class="btn ${atual === 'video' ? 'sel' : ''}" data-a="${acao}" data-v="video">🎬 Vídeos (${qtd('video')})</button>
       <button class="btn ${atual === 'imagem' ? 'sel' : ''}" data-a="${acao}" data-v="imagem">🖼️ Imagens (${qtd('imagem')})</button>
+      <button class="btn ${atual === 'pregacao' ? 'sel' : ''}" data-a="${acao}" data-v="pregacao">📑 Pregações (${qtd('pregacao')})</button>
+      <button class="btn ${atual === 'musica' ? 'sel' : ''}" data-a="${acao}" data-v="musica">🎵 Músicas (${qtd('musica')})</button>
       ${acao === 'bibAba' ? `<button class="btn ${atual === 'fundo' ? 'sel' : ''}" data-a="${acao}" data-v="fundo">🎨 Fundos de versículo (${qtd('fundo')})</button>` : ''}
     </div>`;
   }
@@ -285,13 +291,15 @@
     return `<div class="pagina">
       <div class="cabeca"><h1>Biblioteca</h1>
         <div class="acoes">
-          <button class="btn primary" data-a="importar">${S.bibAba === 'fundo' ? '+ Adicionar imagem de fundo' : '+ Adicionar arquivos'}</button>
+          ${S.bibAba === 'pregacao'
+            ? '<button class="btn primary" data-a="novaPregacao">📑 + Nova pregação</button>'
+            : `<button class="btn primary" data-a="importar">${S.bibAba === 'fundo' ? '+ Adicionar imagem de fundo' : S.bibAba === 'musica' ? '+ Adicionar músicas' : '+ Adicionar arquivos'}</button>`}
           <button class="btn danger" data-a="apagarAntigos" ${antigos ? '' : 'disabled'}>🗑 Apagar antigos (${antigos})</button>
         </div></div>
-      <p class="note">"Apagar antigos" apaga fotos e vídeos que não foram usados nos últimos 7 dias e não estão em nenhuma reunião de hoje em diante.</p>
+      <p class="note">"Apagar antigos" apaga fotos, vídeos e pregações que não foram usados nos últimos 7 dias e não estão em nenhuma reunião de hoje em diante. Músicas e fundos nunca são apagados por ele.</p>
       ${subAbas(S.bibAba, 'bibAba')}
       ${lista.length ? `<div class="grade">${lista.map(b => cartaoArquivo(b)).join('')}</div>`
-        : `<div class="vazio"><div class="grande">${S.bibAba === 'fundo' ? '🎨' : '🗂️'}</div><div>${S.bibAba === 'video' ? 'Nenhum vídeo ainda.' : S.bibAba === 'fundo' ? 'Nenhum fundo próprio ainda. Os fundos que vêm no programa aparecem na hora de escolher o fundo da reunião.' : 'Nenhuma imagem ainda.'}</div></div>`}
+        : `<div class="vazio"><div class="grande">${S.bibAba === 'fundo' ? '🎨' : '🗂️'}</div><div>${S.bibAba === 'video' ? 'Nenhum vídeo ainda.' : S.bibAba === 'musica' ? 'Nenhuma música ainda. Hinos, louvores e fundos de oração ficam guardados aqui para sempre.' : S.bibAba === 'pregacao' ? 'Nenhuma pregação ainda. Use "+ Nova pregação" e escolha todas as imagens que o bispo mandou.' : S.bibAba === 'fundo' ? 'Nenhum fundo próprio ainda. Os fundos que vêm no programa aparecem na hora de escolher o fundo da reunião.' : 'Nenhuma imagem ainda.'}</div></div>`}
     </div>`;
   }
 
@@ -309,14 +317,15 @@
   }
 
   /** No "Testar", cada passagem da Palavra é uma tela. */
-  const telasDoTestar = r => r.itens.flatMap(it => (it.tipo === 'palavra' ? it.passagens.map(p => ({ it, p })) : [{ it }]));
+  const telasDoTestar = r => r.itens.flatMap(it => (it.tipo === 'palavra' ? it.passagens.map(p => ({ it, p }))
+    : it.tipo === 'pregacao' ? it.arquivos.map((a, slide) => ({ it, slide })) : [{ it }]));
 
   function janelaTestar() {
     const r = M.reunioesCompletas.find(x => x.id === S.aberta);
     const telas = r ? telasDoTestar(r) : [];
     if (!telas.length) { S.testar = null; return ''; }
     const i = Math.max(0, Math.min(telas.length - 1, S.testar));
-    const { it, p } = telas[i];
+    const { it, p, slide } = telas[i];
     let palco;
     if (p) {
       const versao = p.versao || r.versao;
@@ -328,12 +337,13 @@
       const rot = `${p.titulo.replace(/:\d+(-\d+)?$/, '')}:${p.ref.v}`;
       palco = window.Versiculo.html({ texto: S.previaTestar.texto, rotulo: rot, versao, fundo: r.fundo }, midia);
     } else {
-      palco = it.tipo === 'imagem'
-        ? `<img src="${midia(it.arquivo)}" alt="">`
+      palco = it.tipo === 'imagem' ? `<img src="${midia(it.arquivo)}" alt="">`
+        : it.tipo === 'pregacao' ? `<img src="${midia(it.arquivos[slide])}" alt="">`
+        : it.tipo === 'musica' ? `<div class="palco-musica"><div>🎵</div><audio src="${midia(it.arquivo)}" controls></audio><p>A música toca sem mudar a TV: ela continua mostrando o item anterior.</p></div>`
         : `<video src="${midia(it.arquivo)}" controls autoplay></video>`;
     }
     return `<div class="fundo-modal"><div class="janela" role="dialog" aria-label="Testar a reunião">
-      <header><h2>Testar · ${i + 1} de ${telas.length}: ${p ? 'Palavra · ' + esc(p.titulo) : esc(it.titulo)}</h2><button class="btn sm" data-a="fecharModal">✕ Fechar</button></header>
+      <header><h2>Testar · ${i + 1} de ${telas.length}: ${p ? 'Palavra · ' + esc(p.titulo) : esc(it.titulo) + (slide != null ? ` · imagem ${slide + 1} de ${it.arquivos.length}` : '')}</h2><button class="btn sm" data-a="fecharModal">✕ Fechar</button></header>
       <div class="corpo"><div class="palco">${palco}</div>
         <p class="note">Assim aparece na TV. Este teste não mexe na TV da igreja.${p ? ' No culto, as setas do celular passam pelos outros versículos.' : ''}</p></div>
       <footer>
@@ -483,7 +493,7 @@
   function avisarImportacao(r) {
     if (!r) return;
     let t = r.qtd ? `${r.qtd} ${r.qtd === 1 ? 'arquivo adicionado' : 'arquivos adicionados'}.` : 'Nenhum arquivo adicionado.';
-    if (r.ignorados) t += ` ${r.ignorados} não ${r.ignorados === 1 ? 'é' : 'são'} foto nem vídeo e ficou de fora.`;
+    if (r.ignorados) t += ` ${r.ignorados} não ${r.ignorados === 1 ? 'é' : 'são'} foto, vídeo nem música e ${r.ignorados === 1 ? 'ficou' : 'ficaram'} de fora.`;
     avisar(t);
   }
   const reuniaoAberta = () => M.reunioesCompletas.find(x => x.id === S.aberta);
@@ -532,6 +542,12 @@
       const comoFundo = (S.aba === 'biblioteca' && S.bibAba === 'fundo') || S.fundo;
       const r = await window.notebook.importarDialogo(S.aba === 'reunioes' && !comoFundo ? S.aberta : null, comoFundo);
       avisarImportacao(r);
+    },
+    novaPregacao: async () => {
+      const r = await window.notebook.importarPregacao(S.aba === 'reunioes' ? S.aberta : null);
+      if (!r) return;
+      if (!r.qtd) { avisar('Nenhuma imagem escolhida. A pregação precisa de imagens (fotos).'); return; }
+      avisar(`Pregação criada com ${r.imagens} imagens. Para mudar o nome, vá na Biblioteca.`);
     },
     daBiblioteca: () => { S.escolher = { aba: 'video', sel: new Set() }; },
     escolherAba: v => { S.escolher.aba = v; },
@@ -741,6 +757,11 @@
     arrastando = 0; $('soltar').hidden = true;
     const destino = S.aba === 'reunioes' && S.aberta ? S.aberta : null;
     if (!destino && S.aba !== 'biblioteca') { S.aba = 'biblioteca'; desenhar(); }
+    if (S.aba === 'biblioteca' && S.bibAba === 'pregacao') {
+      const r = await window.notebook.importarPregacaoArquivos(ev.dataTransfer.files);
+      avisar(r && r.qtd ? `Pregação criada com ${r.imagens} imagens.` : 'Para criar uma pregação, solte imagens (fotos).');
+      return;
+    }
     const comoFundo = (S.aba === 'biblioteca' && S.bibAba === 'fundo') || S.fundo;
     avisarImportacao(await window.notebook.importarArquivos(ev.dataTransfer.files, comoFundo ? null : destino, comoFundo));
   });

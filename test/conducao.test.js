@@ -7,6 +7,8 @@ const REUNIAO = {
   itens: [
     { id: 'img', tipo: 'imagem' },
     { id: 'vid', tipo: 'video' },
+    { id: 'hino', tipo: 'musica', bibliotecaId: 'b-hino' },
+    { id: 'preg', tipo: 'pregacao', arquivos: ['a.png', 'b.png', 'c.png'] },
     { id: 'pal', tipo: 'palavra', passagens: [
       { id: 'p1', ref: { l: 18, c: 23, v: 1 }, ate: 6 },
       { id: 'p2', ref: { l: 18, c: 23, v: 8 }, ate: 8 },
@@ -17,6 +19,7 @@ const REUNIAO = {
 const ctx = {
   reuniaoExiste: id => id === 'r1',
   item: (rid, iid) => (rid === 'r1' ? REUNIAO.itens.find(i => i.id === iid) : undefined),
+  musica: bid => (['b-hino', 'b-oracao'].includes(bid) ? { id: bid } : undefined),
   versao: () => 'ACF',
   existe: (_v, r) => r.l === 18 && r.c === 23 && r.v >= 1 && r.v <= 10,
   vizinho: (_v, r, d) => (r.v + d >= 1 && r.v + d <= 10 ? { ...r, v: r.v + d } : null),
@@ -188,4 +191,61 @@ test('trocar de capítulo (ou livro) direto, continuando na Palavra', () => {
   e = aplicar(e, { cmd: 'irVersiculo', c: 91, v: 4 }, ctx2);
   assert.deepEqual(e.tv.ref, { l: 18, c: 91, v: 4 });
   assert.equal(aplicar(e, { cmd: 'irVersiculo', c: 999 }, ctx2), e);
+});
+
+test('música toca sem mudar a TV', () => {
+  const e = run({ cmd: 'escolherReuniao', id: 'r1' }, { cmd: 'mostrar', itemId: 'img' }, { cmd: 'mostrar', itemId: 'hino' });
+  assert.deepEqual(e.tv, { tipo: 'item', itemId: 'img' });
+  assert.equal(e.audio.itemId, 'hino');
+  assert.equal(e.audio.tocando, true);
+  assert.equal(aplicar(e, { cmd: 'mostrar', itemId: 'hino' }, ctx), e, 'tocar de novo não recomeça');
+});
+
+test('a música para quando outra coisa vai para a TV', () => {
+  let e = run({ cmd: 'escolherReuniao', id: 'r1' }, { cmd: 'mostrar', itemId: 'hino' }, { cmd: 'mostrar', itemId: 'img' });
+  assert.equal(e.audio, null);
+  e = run({ cmd: 'escolherReuniao', id: 'r1' }, { cmd: 'mostrar', itemId: 'hino' }, { cmd: 'mostrar', itemId: 'pal' });
+  assert.equal(e.audio, null);
+});
+
+test('música continua ao apagar a TV e ao passar versículos', () => {
+  let e = run({ cmd: 'escolherReuniao', id: 'r1' }, { cmd: 'mostrar', itemId: 'pal' }, { cmd: 'mostrar', itemId: 'hino' }, { cmd: 'passoVersiculo', delta: 1 }, { cmd: 'apagar' });
+  assert.equal(e.audio.tocando, true);
+});
+
+test('música avulsa, pausar, continuar, parar', () => {
+  let e = run({ cmd: 'escolherReuniao', id: 'r1' }, { cmd: 'tocarMusica', bibliotecaId: 'b-oracao' });
+  assert.deepEqual([e.audio.bibliotecaId, e.audio.itemId], ['b-oracao', null]);
+  assert.equal(aplicar(e, { cmd: 'tocarMusica', bibliotecaId: 'nao-existe' }, ctx), e);
+  e = aplicar(e, { cmd: 'audioPausar' }, ctx);
+  assert.equal(e.audio.tocando, false);
+  e = aplicar(e, { cmd: 'audioContinuar' }, ctx);
+  assert.equal(e.audio.tocando, true);
+  e = aplicar(e, { cmd: 'audioProgresso', inicio: e.audio.inicio, t: 200, dur: 200, terminou: true }, ctx);
+  assert.equal(e.audio.terminou, true);
+  const de = e.audio.inicio;
+  e = aplicar(e, { cmd: 'audioContinuar' }, ctx);
+  assert.equal(e.audio.inicio, de + 1, 'terminou: toca de novo do começo');
+  e = aplicar(e, { cmd: 'audioParar' }, ctx);
+  assert.equal(e.audio, null);
+});
+
+test('música pausa o vídeo que estava passando', () => {
+  const e = run({ cmd: 'escolherReuniao', id: 'r1' }, { cmd: 'mostrar', itemId: 'vid' }, { cmd: 'mostrar', itemId: 'hino' });
+  assert.equal(e.video.tocando, false);
+});
+
+test('pregação começa na primeira imagem e as setas param nas pontas', () => {
+  let e = run({ cmd: 'escolherReuniao', id: 'r1' }, { cmd: 'mostrar', itemId: 'preg' });
+  assert.deepEqual(e.tv, { tipo: 'item', itemId: 'preg', slide: 0 });
+  assert.equal(aplicar(e, { cmd: 'passoSlide', delta: -1 }, ctx), e);
+  e = aplicar(e, { cmd: 'passoSlide', delta: 1 }, ctx);
+  e = aplicar(e, { cmd: 'passoSlide', delta: 1 }, ctx);
+  assert.equal(e.tv.slide, 2);
+  assert.equal(aplicar(e, { cmd: 'passoSlide', delta: 1 }, ctx), e);
+  e = aplicar(e, { cmd: 'irSlide', n: 0 }, ctx);
+  assert.equal(e.tv.slide, 0);
+  assert.equal(aplicar(e, { cmd: 'irSlide', n: 9 }, ctx), e);
+  const outra = run({ cmd: 'escolherReuniao', id: 'r1' }, { cmd: 'mostrar', itemId: 'img' });
+  assert.equal(aplicar(outra, { cmd: 'passoSlide', delta: 1 }, ctx), outra, 'sem pregação na TV não faz nada');
 });
