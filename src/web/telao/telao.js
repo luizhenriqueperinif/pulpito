@@ -1,7 +1,7 @@
 // Telão: mostra o que a Condução manda. Se a conexão cair, continua mostrando o que estava.
 (function () {
   const $ = id => document.getElementById(id);
-  const camadas = { espera: $('c-espera'), imagem: $('c-imagem'), video: $('c-video') };
+  const camadas = { espera: $('c-espera'), imagem: $('c-imagem'), video: $('c-video'), versiculo: $('c-versiculo') };
   const img = $('img');
   const video = $('video');
   let conexao;
@@ -11,6 +11,20 @@
     for (const [k, el] of Object.entries(camadas)) el.classList.toggle('visivel', k === nome);
     atual.camada = nome;
   }
+
+  // Versículo: só redesenha quando muda o texto, a referência ou o fundo.
+  let chaveVersiculo = '';
+  function mostrarVersiculo(vs) {
+    const chave = JSON.stringify([vs.texto, vs.rotulo, vs.versao, vs.fundo]);
+    if (chave !== chaveVersiculo) {
+      chaveVersiculo = chave;
+      camadas.versiculo.innerHTML = window.Versiculo.html(vs, conexao.midia);
+      window.Versiculo.ajustar(camadas.versiculo);
+    }
+    mostrarCamada('versiculo');
+  }
+  window.addEventListener('resize', () => window.Versiculo.ajustar(camadas.versiculo));
+  if (document.fonts) document.fonts.ready.then(() => window.Versiculo.ajustar(camadas.versiculo));
 
   function aplicar(msg) {
     const { estado, reuniao, info } = msg;
@@ -29,6 +43,12 @@
 
     if (estado.tv.tipo === 'espera') { pararVideo(); mostrarCamada('espera'); return; }
     if (estado.tv.tipo === 'preto') { video.pause(); mostrarCamada(null); return; }
+    if (estado.tv.ref && msg.versiculo) {
+      // Pausa o vídeo sem esquecer onde ele estava: ao voltar, continua dali.
+      if (!video.paused) video.pause();
+      mostrarVersiculo(msg.versiculo);
+      return;
+    }
 
     const it = reuniao && reuniao.itens.find(i => i.id === estado.tv.itemId);
     if (!it) return;

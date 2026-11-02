@@ -7,6 +7,7 @@ const path = require('path');
 const { WebSocketServer } = require('ws');
 const QRCode = require('qrcode');
 const { estadoInicial, aplicar } = require('./conducao');
+const biblia = require('./biblia');
 
 const RAIZ = path.join(__dirname, '..', '..');
 const PASTAS_ESTATICAS = {
@@ -63,6 +64,9 @@ function enviarArquivo(req, res, arquivo) {
   });
 }
 
+/** Muda a cada vez que o programa abre: as páginas usam para saber que precisam recarregar. */
+const INICIO = Date.now().toString(36);
+
 function criarServidor({ dados }) {
   const porta = dados.config.porta;
   const token = dados.config.token;
@@ -72,10 +76,63 @@ function criarServidor({ dados }) {
   let qrSvg = '';
   let url = '';
 
+  /** Passagem preparada que está na TV (dentro da Palavra), se houver. */
+  function passagemNaTv(e) {
+    if (e.tv.tipo !== 'item' || !e.tv.passagemId) return null;
+    const it = dados.item(e.reuniaoId, e.tv.itemId);
+    return it && it.passagens ? it.passagens.find(p => p.id === e.tv.passagemId) || null : null;
+  }
+
+  /** Versão da Bíblia do que está na TV: a da passagem preparada, senão a do pastor da reunião. */
+  function versaoDe(e) {
+    const p = passagemNaTv(e);
+    if (p && p.versao) return p.versao;
+    const r = e.reuniaoId && dados.reuniaoCompleta(e.reuniaoId);
+    return r ? r.versao : 'ACF';
+  }
+
   const ctx = {
     reuniaoExiste: id => !!dados.reuniao(id),
     item: (rid, iid) => dados.item(rid, iid),
+    versao: versaoDe,
+    existe: (v, r) => biblia.existe(v, r),
+    vizinho: (v, r, d) => biblia.vizinho(v, r, d),
   };
+
+  /** Capítulo antes/depois (passa para o livro vizinho no fim do livro). */
+  function capituloVizinho(versao, ref, delta) {
+    let { l, c } = ref;
+    c += delta;
+    if (c < 1) { l -= 1; if (l < 0) return null; c = 1; while (biblia.qtdVersos(versao, l, c + 1)) c++; }
+    else if (!biblia.qtdVersos(versao, l, c)) { l += 1; c = 1; if (!biblia.qtdVersos(versao, l, c)) return null; }
+    return { l, c, rotulo: `${biblia.nomeLivro(l)} ${c}` };
+  }
+
+  /** Tudo que a TV e o celular precisam para mostrar o versículo que está na TV. */
+  function versiculoNaTv(reuniao) {
+    const ref = estado.tv.ref;
+    if (!ref) return null;
+    const versao = versaoDe(estado);
+    const ant = biblia.vizinho(versao, ref, -1);
+    const prox = biblia.vizinho(versao, ref, 1);
+    let planejado = null;
+    const p = passagemNaTv(estado);
+    if (p) planejado = { id: p.id, titulo: p.titulo, dentro: ref.l === p.ref.l && ref.c === p.ref.c && ref.v >= p.ref.v && ref.v <= p.ate };
+    return {
+      ref, versao,
+      texto: biblia.texto(versao, ref),
+      rotulo: biblia.rotulo(ref),
+      capitulo: `${biblia.nomeLivro(ref.l)} ${ref.c}`,
+      qtdCap: biblia.qtdVersos(versao, ref.l, ref.c),
+      capAnterior: capituloVizinho(versao, ref, -1),
+      capProximo: capituloVizinho(versao, ref, 1),
+      anterior: ant && biblia.rotulo(ant),
+      proximo: prox && biblia.rotulo(prox),
+      avulso: estado.tv.tipo === 'avulso',
+      planejado,
+      fundo: reuniao ? reuniao.fundo : { pronto: 'ceu' },
+    };
+  }
   // Itens apagados ou fora de ordem durante a reunião não quebram nada:
   // o Telão continua mostrando o que estava até o pastor tocar em outro cartão.
 
@@ -84,6 +141,23 @@ function criarServidor({ dados }) {
     const partes = u.pathname.split('/').filter(Boolean);
 
     if (partes.length === 0) { res.writeHead(302, { Location: '/controle/' + u.search }); res.end(); return; }
+
+    if (partes[0] === 'api') {
+      if (u.searchParams.get('t') !== token) { res.writeHead(403); res.end(); return; }
+      const versao = biblia.VERSOES.includes(u.searchParams.get('v')) ? u.searchParams.get('v') : 'ACF';
+      let corpo = null;
+      if (partes[1] === 'biblia') corpo = biblia.indice(versao);
+      if (partes[1] === 'texto') {
+        const l = Number(u.searchParams.get('l')), c = Number(u.searchParams.get('c'));
+        const de = Number(u.searchParams.get('de')) || 1, ate = Math.min(Number(u.searchParams.get('ate')) || de, de + 199);
+        corpo = [];
+        for (let v = de; v <= ate; v++) if (biblia.existe(versao, { l, c, v })) corpo.push({ v, texto: biblia.texto(versao, { l, c, v }) });
+      }
+      if (!corpo) { res.writeHead(404); res.end(); return; }
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'max-age=3600' });
+      res.end(JSON.stringify(corpo));
+      return;
+    }
 
     if (partes[0] === 'midia') {
       if (u.searchParams.get('t') !== token) { res.writeHead(403); res.end(); return; }
@@ -110,13 +184,16 @@ function criarServidor({ dados }) {
   }
 
   function pacote(completo) {
+    const reuniao = estado.reuniaoId ? dados.reuniaoCompleta(estado.reuniaoId) : null;
     const base = {
       tipo: 'estado',
       estado,
       hoje: dados.hoje(),
       reunioes: dados.resumoReunioes(),
-      reuniao: estado.reuniaoId ? dados.reuniaoCompleta(estado.reuniaoId) : null,
-      info: { url, qrSvg, tv: tvStatus, telas, celulares: celularesConectados(), telaEspera: dados.config.telaEspera },
+      reuniao,
+      versiculo: versiculoNaTv(reuniao),
+      recentes: dados.recentes(reuniao?.pastorId).map(r => ({ ...r, rotulo: biblia.rotulo(r) })),
+      info: { inicio: INICIO, url, qrSvg, tv: tvStatus, telas, celulares: celularesConectados(), telaEspera: dados.config.telaEspera },
     };
     if (completo) {
       // Só o Painel precisa de tudo para preparar as reuniões.
@@ -148,6 +225,9 @@ function criarServidor({ dados }) {
       dados.removerReuniao(c.id);
     },
     adicionarItens: c => dados.adicionarItens(c.reuniaoId, c.bibliotecaIds || []),
+    adicionarVersiculo: c => dados.adicionarVersiculo(c.reuniaoId, c),
+    moverPassagem: c => dados.moverPassagem(c.reuniaoId, c.passagemId, Number(c.delta) || 0),
+    removerPassagem: c => dados.removerPassagem(c.reuniaoId, c.passagemId),
     moverItem: c => dados.moverItem(c.reuniaoId, c.itemId, Number(c.delta)),
     removerItem: c => dados.removerItem(c.reuniaoId, c.itemId),
     renomearArquivo: c => dados.renomearArquivo(c.id, c.titulo),
@@ -167,7 +247,13 @@ function criarServidor({ dados }) {
       return;
     }
     const novo = aplicar(estado, cmd, ctx);
-    if (novo !== estado) { estado = novo; transmitir(); }
+    if (novo === estado) return;
+    estado = novo;
+    // Guarda em "Últimos usados" do pastor o versículo que acabou de abrir.
+    if (['mostrarVersiculo', 'mostrar', 'mostrarPassagem'].includes(cmd.cmd) && estado.tv.ref) {
+      dados.lembrarVersiculo(dados.reuniao(estado.reuniaoId)?.pastorId, estado.tv.ref);
+    }
+    transmitir();
   }
 
   wss.on('connection', (ws, req) => {

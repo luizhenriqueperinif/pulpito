@@ -167,3 +167,88 @@ test('dados da versão 1 são convertidos: arquivos vão para a Biblioteca', () 
   assert.deepEqual(c.itens.map(i => [i.id, i.titulo, i.arquivo]), [['i1', 'Convite', 'c.png'], ['i2', 'Testemunho', 't.webm']]);
   assert.equal(JSON.parse(fs.readFileSync(path.join(pasta, 'dados.json'), 'utf8')).versao, 2, 'conversão foi salva');
 });
+
+test('versículos preparados ficam todos dentro de um item "Palavra"', () => {
+  const d = novo();
+  const r = d.criarReuniao({});
+  d.adicionarVersiculo(r.id, { ref: { l: 18, c: 23, v: 1 }, ate: 6, versao: 'NVI' });
+  d.adicionarVersiculo(r.id, { ref: { l: 42, c: 3, v: 16 } });
+  const itens = d.reuniaoCompleta(r.id).itens;
+  assert.equal(itens.length, 1, 'um cartão só');
+  assert.equal(itens[0].tipo, 'palavra');
+  const [sl, jo] = itens[0].passagens;
+  assert.equal(sl.titulo, 'Salmos 23:1-6');
+  assert.equal(sl.versao, 'NVI');
+  assert.equal(jo.titulo, 'João 3:16');
+  assert.equal(jo.versao, null, 'sem versão própria: usa a do pastor');
+});
+
+test('passagens da Palavra mudam de ordem e, sem nenhuma, a Palavra sai da reunião', () => {
+  const d = novo();
+  const r = d.criarReuniao({});
+  const a = d.adicionarVersiculo(r.id, { ref: { l: 18, c: 23, v: 1 } });
+  const b = d.adicionarVersiculo(r.id, { ref: { l: 42, c: 3, v: 16 } });
+  d.moverPassagem(r.id, b.id, -1);
+  assert.deepEqual(d.reuniaoCompleta(r.id).itens[0].passagens.map(p => p.id), [b.id, a.id]);
+  d.removerPassagem(r.id, a.id);
+  assert.equal(d.reuniaoCompleta(r.id).itens[0].passagens.length, 1);
+  d.removerPassagem(r.id, b.id);
+  assert.equal(d.reuniaoCompleta(r.id).itens.length, 0);
+});
+
+test('versículos soltos de antes viram uma Palavra no lugar do primeiro', () => {
+  const pasta = pastaTemp();
+  const v = (id, l, c, n) => ({ id, tipo: 'versiculo', ref: { l, c, v: n }, ate: n, versao: null });
+  fs.writeFileSync(path.join(pasta, 'dados.json'), JSON.stringify({
+    versao: 2, config: { token: 'x', porta: 1 }, pastores: [], biblioteca: [{ id: 'b1', tipo: 'imagem', titulo: 'Foto', arquivo: 'f.png', criadoEm: '2026-01-01' }],
+    reunioes: [{ id: 'r1', data: '2026-01-01', hora: '19:00', itens: [{ id: 'i1', bibliotecaId: 'b1' }, v('v1', 18, 23, 1), { id: 'i2', bibliotecaId: 'b1' }, v('v2', 42, 3, 16)] }],
+  }));
+  const d = new Dados(pasta);
+  const itens = d.reuniaoCompleta('r1').itens;
+  assert.deepEqual(itens.map(i => i.tipo), ['imagem', 'palavra', 'imagem']);
+  assert.deepEqual(itens[1].passagens.map(p => p.titulo), ['Salmos 23:1', 'João 3:16']);
+});
+
+test('copiar reunião leva os versículos e o fundo', () => {
+  const d = novo();
+  const { novos } = d.importarArquivos(arquivos('foto.png'));
+  const r1 = d.criarReuniao({ fundo: 'noite' });
+  d.adicionarItens(r1.id, [novos[0].id]);
+  d.adicionarVersiculo(r1.id, { ref: { l: 18, c: 23, v: 1 }, ate: 6 });
+  const r2 = d.criarReuniao({ copiarDe: r1.id });
+  const c = d.reuniaoCompleta(r2.id);
+  assert.deepEqual(c.itens.map(i => i.tipo), ['palavra']);
+  assert.deepEqual(c.itens[0].passagens.map(p => p.titulo), ['Salmos 23:1-6']);
+  assert.deepEqual(c.fundo, { pronto: 'noite' });
+});
+
+test('fundo: pronto, da Biblioteca, ou o padrão quando some', () => {
+  const d = novo();
+  const { novos, ignorados } = d.importarArquivos(arquivos('igreja.jpg', 'video.mp4'), { comoFundo: true });
+  assert.equal(ignorados, 1, 'vídeo não serve de fundo');
+  assert.equal(novos[0].tipo, 'fundo');
+  const r = d.criarReuniao({ fundo: novos[0].id });
+  assert.deepEqual(d.reuniaoCompleta(r.id).fundo, { arquivo: novos[0].arquivo });
+  assert.equal(d.usos(novos[0].id), 1);
+  d.removerDaBiblioteca(novos[0].id);
+  assert.deepEqual(d.reuniaoCompleta(r.id).fundo, { pronto: 'ceu' });
+  d.editarReuniao(r.id, { fundo: 'qualquer-coisa' });
+  assert.deepEqual(d.reuniaoCompleta(r.id).fundo, { pronto: 'ceu' });
+});
+
+test('fundos nunca são apagados por "Apagar antigos"', () => {
+  const d = new Dados(pastaTemp(), { hoje: () => '2026-01-01' });
+  d.importarArquivos(arquivos('igreja.jpg'), { comoFundo: true });
+  d.hoje = () => '2026-12-31';
+  assert.equal(d.antigos().length, 0);
+});
+
+test('últimos versículos usados: por pastor, sem repetir, no máximo 6', () => {
+  const d = novo();
+  for (let v = 1; v <= 8; v++) d.lembrarVersiculo('p1', { l: 18, c: 23, v });
+  d.lembrarVersiculo('p1', { l: 18, c: 23, v: 5 });
+  assert.deepEqual(d.recentes('p1').map(r => r.v), [5, 8, 7, 6, 4, 3]);
+  assert.deepEqual(d.recentes('p2'), []);
+  d.lembrarVersiculo(null, { l: 0, c: 1, v: 1 });
+  assert.equal(d.recentes(null).length, 1);
+});

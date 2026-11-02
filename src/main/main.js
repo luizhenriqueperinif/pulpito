@@ -97,26 +97,24 @@ function telasMudaram() {
 }
 
 /** Copia os arquivos para a Biblioteca e, se veio uma reunião, coloca no fim dela. */
-function importar(caminhos, reuniaoId) {
-  const { novos, ignorados } = dados.importarArquivos(caminhos);
-  if (reuniaoId && novos.length) dados.adicionarItens(reuniaoId, novos.map(b => b.id));
+function importar(caminhos, reuniaoId, comoFundo) {
+  const { novos, ignorados } = dados.importarArquivos(caminhos, { comoFundo: !!comoFundo });
+  if (reuniaoId && novos.length && !comoFundo) dados.adicionarItens(reuniaoId, novos.map(b => b.id));
   servidor.transmitir();
   return { qtd: novos.length, ignorados };
 }
 
-ipcMain.handle('importar-dialogo', async (_e, { reuniaoId } = {}) => {
-  const r = await dialog.showOpenDialog(painel, {
-    title: 'Escolha as fotos e vídeos',
-    properties: ['openFile', 'multiSelections'],
-    filters: [{ name: 'Fotos e vídeos', extensions: [...EXT_IMAGEM, ...EXT_VIDEO] }],
-  });
+ipcMain.handle('importar-dialogo', async (_e, { reuniaoId, comoFundo } = {}) => {
+  const r = await dialog.showOpenDialog(painel, comoFundo
+    ? { title: 'Escolha as imagens de fundo', properties: ['openFile', 'multiSelections'], filters: [{ name: 'Imagens', extensions: EXT_IMAGEM }] }
+    : { title: 'Escolha as fotos e vídeos', properties: ['openFile', 'multiSelections'], filters: [{ name: 'Fotos e vídeos', extensions: [...EXT_IMAGEM, ...EXT_VIDEO] }] });
   if (r.canceled || r.filePaths.length === 0) return null;
-  return importar(r.filePaths, reuniaoId);
+  return importar(r.filePaths, reuniaoId, comoFundo);
 });
 
-ipcMain.handle('importar-caminhos', (_e, { caminhos, reuniaoId } = {}) => {
+ipcMain.handle('importar-caminhos', (_e, { caminhos, reuniaoId, comoFundo } = {}) => {
   if (!Array.isArray(caminhos) || caminhos.length === 0) return null;
-  return importar(caminhos.filter(c => typeof c === 'string'), reuniaoId);
+  return importar(caminhos.filter(c => typeof c === 'string'), reuniaoId, comoFundo);
 });
 
 ipcMain.handle('trocar-tela-espera', async () => {

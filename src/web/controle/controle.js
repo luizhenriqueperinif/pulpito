@@ -2,14 +2,18 @@
 (function () {
   const app = document.getElementById('app');
   const local = new URLSearchParams(location.search).get('local') === '1';
-  const ICONE = { imagem: '🖼️', video: '🎬' };
+  const ICONE = { imagem: '🖼️', video: '🎬', palavra: '📖' };
   const TIPO = { imagem: 'Imagem', video: 'Vídeo' };
+  const ULTIMO_DO_AT = 38; // Malaquias
 
   let dados = null;            // último pacote recebido do Notebook
   let con = { conectado: false };
   let confirmarEncerrar = false;
   let verOutras = false;
+  let escolhendo = null;       // { etapa: 'livro'|'cap'|'vers', test: 'AT'|'NT', l, c } escolhendo versículo
+  let palavraAberta = false;   // painel da Palavra aberto (setas + passagens preparadas)
   let chaveTela = '';          // para não redesenhar tudo só porque o tempo do vídeo andou
+  const indices = {};          // livros e capítulos de cada versão (vem do notebook uma vez)
 
   const conexao = window.Auxilio.conectar({
     papel: 'controle',
@@ -19,9 +23,20 @@
   });
 
   const mmss = s => { s = Math.max(0, Math.floor(s || 0)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
-  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const enviar = cmd => conexao.enviar(cmd);
+  const versao = () => (dados && dados.reuniao && dados.reuniao.versao) || 'ACF';
 
+  function carregarIndice(v) {
+    if (indices[v]) return;
+    indices[v] = 'carregando';
+    fetch(`/api/biblia?t=${encodeURIComponent(conexao.token)}&v=${v}`)
+      .then(r => r.json())
+      .then(j => { indices[v] = j; desenhar(true); })
+      .catch(() => { delete indices[v]; });
+  }
+
+  // ---------- o que está na TV ----------
   function itemNaTv() {
     const e = dados.estado;
     return e.tv.tipo === 'item' && dados.reuniao ? dados.reuniao.itens.find(i => i.id === e.tv.itemId) : null;
@@ -31,6 +46,7 @@
     const e = dados.estado;
     if (e.tv.tipo === 'espera') return 'Tela de espera';
     if (e.tv.tipo === 'preto') return 'TV apagada';
+    if (dados.versiculo) return `📖 ${dados.versiculo.rotulo} · ${dados.versiculo.versao}${dados.versiculo.avulso ? ' (fora do planejado)' : ''}`;
     const it = itemNaTv();
     if (!it) return '';
     if (it.tipo === 'video') {
@@ -44,6 +60,7 @@
     const e = dados.estado;
     if (e.tv.tipo === 'espera') return `<div class="tv espera"><div class="rot">Tela de espera</div></div>`;
     if (e.tv.tipo === 'preto') return `<div class="tv"><div class="rot">TV apagada<small>tela preta</small></div></div>`;
+    if (dados.versiculo) return `<div class="tv">${window.Versiculo.html(dados.versiculo, conexao.midia)}</div>`;
     const it = itemNaTv();
     if (it && it.tipo === 'imagem') return `<div class="tv"><img src="${conexao.midia(it.arquivo)}" alt=""></div>`;
     if (it && it.tipo === 'video') return `<div class="tv video"><div class="rot">🎬 ${esc(it.titulo)}</div></div>`;
@@ -77,15 +94,18 @@
   function cartao(it) {
     const e = dados.estado;
     const naTv = e.tv.tipo === 'item' && e.tv.itemId === it.id;
-    const icone = it.tipo === 'imagem'
-      ? `<img src="${conexao.midia(it.arquivo)}" alt="" loading="lazy">`
-      : ICONE[it.tipo];
-    return `<button class="card ${naTv ? 'on' : ''}" data-cmd="mostrar" data-item="${it.id}">
+    const icone = it.tipo === 'imagem' ? `<img src="${conexao.midia(it.arquivo)}" alt="" loading="lazy">` : ICONE[it.tipo] || '•';
+    const sub = it.tipo === 'palavra'
+      ? it.passagens.map(p => esc(p.titulo)).join(' · ')
+      : TIPO[it.tipo] || '';
+    const titulo = it.tipo === 'palavra' ? 'Palavra' : esc(it.titulo);
+    return `<button class="card ${it.tipo === 'palavra' ? 'palavra' : ''} ${naTv ? 'on' : ''}" data-acao="cartao" data-item="${it.id}">
       <span class="ic" aria-hidden="true">${icone}</span>
-      <span><span class="t">${esc(it.titulo)}</span><br><span class="d">${TIPO[it.tipo]}</span></span>
+      <span><span class="t">${titulo}</span><br><span class="d">${sub}</span></span>
       ${naTv ? '<span class="chip">NA TV</span>' : ''}</button>`;
   }
 
+  // ---------- telas ----------
   const diaSemana = d => { const [a, m, dd] = d.split('-').map(Number); return new Date(a, m - 1, dd).toLocaleDateString('pt-BR', { weekday: 'long' }); };
   const tituloReuniao = r => r.nome || `Reunião de ${diaSemana(r.data)}`;
 
@@ -116,16 +136,103 @@
     const r = dados.reuniao, e = dados.estado;
     return `<div class="pad">
       ${avisoConexao()}
-      <div class="top"><div class="nome">${esc(tituloReuniao(r))} · ${esc(r.hora)}</div><div class="quem">${r.pastor ? esc(r.pastor) + ' · ' : ''}${r.itens.length} itens</div></div>
+      <div class="top"><div class="nome">${esc(tituloReuniao(r))} · ${esc(r.hora)}</div><div class="quem">${r.pastor ? esc(r.pastor) + ' · ' : ''}Bíblia ${esc(r.versao)}</div></div>
       <div class="mini"><div class="eyebrow">Na TV agora</div>${miniTv()}<div class="cap">${esc(rotuloTv())}</div></div>
       ${painelVideo()}
       <div class="eyebrow">Toque para mostrar na TV</div>
-      <div class="cards">${r.itens.map(cartao).join('')}</div>
+      <div class="cards">${r.itens.length ? r.itens.map(cartao).join('') : '<p class="note">Esta reunião ainda não tem itens.</p>'}</div>
       <button class="btn danger" data-acao="encerrar">✅ Encerrar reunião</button>
     </div>
     <div class="toolbar">
+      <button class="btn" data-acao="abrirEscolha">📖 Versículo</button>
       <button class="btn ${e.tv.tipo === 'preto' ? 'live' : ''}" data-cmd="apagar">${e.tv.tipo === 'preto' ? '💡 Ligar TV' : '⬛ Apagar TV'}</button>
     </div>`;
+  }
+
+  // ---------- versículo na TV: setas livres ----------
+  // Números do capítulo que está na TV: o atual marcado, os preparados destacados.
+  function gradeCapitulo(vs, palavra) {
+    if (!vs.qtdCap) return '';
+    const p = vs.planejado && palavra && palavra.passagens.find(x => x.id === vs.planejado.id);
+    const preparado = n => p && p.ref.l === vs.ref.l && p.ref.c === vs.ref.c && n >= p.ref.v && n <= p.ate;
+    return `<div class="eyebrow">Versículos de ${esc(vs.capitulo)}</div>
+      <div class="numeros">${Array.from({ length: vs.qtdCap }, (_, i) => i + 1).map(n => n === vs.ref.v
+        ? `<button class="btn sel" aria-current="true">${n}</button>`
+        : `<button class="btn ${preparado(n) ? 'plan' : ''}" data-acao="irVersiculo" data-v="${n}">${n}</button>`).join('')}</div>`;
+  }
+
+  // ---------- a Palavra: setas livres + passagens preparadas ----------
+  function painelVersiculo() {
+    const vs = dados.versiculo;
+    const palavra = dados.reuniao.itens.find(i => i.tipo === 'palavra');
+    let aviso = '';
+    if (vs.planejado && !vs.planejado.dentro) aviso = `Passou de ${esc(vs.planejado.titulo)}. Pode continuar lendo à vontade.`;
+    if (vs.avulso) aviso = 'Escolhido na hora (fora do que foi preparado).';
+    const preparados = palavra ? `<div class="eyebrow">Preparados para hoje</div>
+        <div class="passagens">${palavra.passagens.map(p => {
+          const atual = vs.planejado && vs.planejado.id === p.id;
+          return `<button class="btn ${atual ? 'sel' : ''}" data-acao="passagem" data-item="${palavra.id}" data-p="${p.id}">${atual ? '● ' : ''}${esc(p.titulo)}</button>`;
+        }).join('')}</div>` : '';
+    const rodape = vs.avulso
+      ? `<button class="btn huge" data-cmd="voltarReuniao">↩ Voltar para a reunião</button>`
+      : '';
+    return `<div class="painel" role="dialog" aria-label="Palavra">
+      <div class="painel-topo"><h2>📖 ${esc(vs.rotulo)} · ${esc(vs.versao)}</h2>
+        ${vs.avulso ? '' : '<button class="btn" data-acao="fecharVerso">✕ Fechar</button>'}</div>
+      <div class="painel-corpo" data-scroll="verso-${esc(vs.capitulo)}">
+        <div class="tv">${window.Versiculo.html(vs, conexao.midia)}</div>
+        <div class="capbar">
+          <button class="btn" data-cmd="passoVersiculo" data-delta="-1" ${vs.anterior ? '' : 'disabled'}>◀<small>${esc(vs.anterior || 'início')}</small></button>
+          <button class="btn atual" data-acao="abrirCapitulos">${esc(vs.capitulo)}<small>trocar capítulo ou livro</small></button>
+          <button class="btn primary" data-cmd="passoVersiculo" data-delta="1" ${vs.proximo ? '' : 'disabled'}>▶<small>${esc(vs.proximo || 'fim')}</small></button>
+        </div>
+        ${aviso ? `<p class="note">${aviso}</p>` : ''}
+        ${gradeCapitulo(vs, palavra)}
+        ${preparados}
+        ${rodape}
+      </div></div>`;
+  }
+
+  // ---------- escolher um versículo: livro → capítulo → versículo ----------
+  function telaEscolha() {
+    const v = versao();
+    const ind = indices[v];
+    carregarIndice(v);
+    const p = escolhendo;
+    let titulo = 'Mostrar versículo', voltar = '', corpo;
+    if (!ind || ind === 'carregando') {
+      corpo = '<p class="note">Abrindo a Bíblia…</p>';
+    } else if (p.etapa === 'livro') {
+      const livros = p.test === 'AT' ? ind.slice(0, ULTIMO_DO_AT + 1) : ind.slice(ULTIMO_DO_AT + 1);
+      const recentes = dados.recentes || [];
+      corpo = `
+        <div class="eyebrow">Últimos usados</div>
+        ${recentes.length
+          ? `<div class="grade2">${recentes.map(r => `<button class="btn" data-acao="recente" data-l="${r.l}" data-c="${r.c}" data-v="${r.v}">${esc(r.rotulo)}</button>`).join('')}</div>`
+          : '<p class="note">Os versículos que você mostrar vão aparecer aqui.</p>'}
+        <div class="eyebrow">Ou escolha o livro</div>
+        <div class="abas2">
+          <button class="btn ${p.test === 'AT' ? 'sel' : ''}" data-acao="testamento" data-v="AT">Antigo Testamento</button>
+          <button class="btn ${p.test === 'NT' ? 'sel' : ''}" data-acao="testamento" data-v="NT">Novo Testamento</button>
+        </div>
+        <div class="grade2">${livros.map(x => `<button class="btn" data-acao="livro" data-l="${x.l}">${esc(x.nome)}</button>`).join('')}</div>`;
+    } else if (p.etapa === 'cap') {
+      const livro = ind[p.l];
+      titulo = `${livro.nome}: capítulo`;
+      const atual = dados.versiculo && dados.versiculo.ref.l === p.l ? dados.versiculo.ref.c : null;
+      corpo = `<button class="btn" data-acao="trocarLivro">📚 Trocar o livro (agora: ${esc(livro.nome)})</button>
+        <div class="eyebrow">Capítulos de ${esc(livro.nome)}</div>
+        <div class="numeros">${livro.caps.map((_, i) => `<button class="btn ${i + 1 === atual ? 'sel' : ''}" data-acao="capitulo" data-c="${i + 1}">${i + 1}</button>`).join('')}</div>`;
+    } else {
+      const livro = ind[p.l];
+      titulo = `${livro.nome} ${p.c}: versículo`;
+      voltar = '<button class="btn" data-acao="voltarEscolha">◀ Voltar</button>';
+      corpo = `<div class="numeros">${Array.from({ length: livro.caps[p.c - 1] }, (_, i) =>
+        `<button class="btn" data-acao="versiculo" data-v="${i + 1}">${i + 1}</button>`).join('')}</div>`;
+    }
+    return `<div class="painel" role="dialog" aria-label="Escolher versículo">
+      <div class="painel-topo">${voltar}<h2>${esc(titulo)}</h2><button class="btn" data-acao="fecharEscolha">✕ Cancelar</button></div>
+      <div class="painel-corpo" data-scroll="escolha-${p.etapa}-${p.test}-${p.l ?? ''}-${p.c ?? ''}">${corpo}</div></div>`;
   }
 
   function avisoConexao() {
@@ -144,11 +251,20 @@
       <button class="btn huge" data-acao="cancelar">Não, continuar</button></div>`;
   }
 
+  function sobreposicao() {
+    if (confirmarEncerrar) return telaConfirmar();
+    if (escolhendo) return telaEscolha();
+    const vs = dados.versiculo;
+    if (vs && (vs.avulso || palavraAberta)) return painelVersiculo();
+    return '';
+  }
+
   function desenhar(forcar) {
     let html;
     if (con.semToken) html = telaSemToken();
     else if (!dados) html = `<div class="pad">${avisoConexao() || '<p class="note">Carregando…</p>'}</div>`;
-    else html = (dados.estado.reuniaoId && dados.reuniao ? telaReuniao() : telaEscolher()) + (confirmarEncerrar ? telaConfirmar() : '');
+    else if (dados.estado.reuniaoId && dados.reuniao) html = telaReuniao() + sobreposicao();
+    else { escolhendo = null; palavraAberta = false; html = telaEscolher() + (confirmarEncerrar ? telaConfirmar() : ''); }
 
     // Se só o tempo do vídeo mudou, atualiza a barra sem redesenhar (o toque do pastor não se perde).
     const chave = html.replace(/data-prog style="width:[^"]*"/, '').replace(/<span data-tempo>[^<]*<\/span>/, '');
@@ -161,24 +277,75 @@
       return;
     }
     chaveTela = chave;
+    const rolagem = {};
+    app.querySelectorAll('[data-scroll]').forEach(el => { rolagem[el.dataset.scroll] = el.scrollTop; });
     app.innerHTML = html;
+    app.querySelectorAll('[data-scroll]').forEach(el => { if (rolagem[el.dataset.scroll]) el.scrollTop = rolagem[el.dataset.scroll]; });
+    window.Versiculo.ajustar(app);
+  }
+
+  // ---------- toques ----------
+  const ACOES = {
+    encerrar: () => { confirmarEncerrar = true; },
+    cancelar: () => { confirmarEncerrar = false; },
+    outras: () => { verOutras = !verOutras; },
+    cartao: el => {
+      const it = dados.reuniao.itens.find(i => i.id === el.dataset.item);
+      if (!it) return;
+      enviar({ cmd: 'mostrar', itemId: it.id });
+      palavraAberta = it.tipo === 'palavra';
+    },
+    passagem: el => { enviar({ cmd: 'mostrarPassagem', itemId: el.dataset.item, passagemId: el.dataset.p }); palavraAberta = true; },
+    fecharVerso: () => { palavraAberta = false; },
+    irVersiculo: el => enviar({ cmd: 'irVersiculo', v: Number(el.dataset.v) }),
+    trocarLivro: () => { escolhendo = { etapa: 'livro', test: escolhendo.test }; },
+    abrirCapitulos: () => {
+      const l = dados.versiculo.ref.l;
+      escolhendo = { etapa: 'cap', l, c: null, test: l > ULTIMO_DO_AT ? 'NT' : 'AT' };
+    },
+    abrirEscolha: () => { escolhendo = { etapa: 'livro', test: 'AT' }; },
+    fecharEscolha: () => { escolhendo = null; },
+    testamento: el => { escolhendo.test = el.dataset.v; },
+    livro: el => {
+      const l = Number(el.dataset.l);
+      const livro = indices[versao()][l];
+      // Livro de um capítulo só (Obadias, Judas...): vai direto para os versículos.
+      escolhendo = { ...escolhendo, l, etapa: livro.caps.length === 1 ? 'vers' : 'cap', c: livro.caps.length === 1 ? 1 : null };
+    },
+    capitulo: el => { escolhendo = { ...escolhendo, c: Number(el.dataset.c), etapa: 'vers' }; },
+    voltarEscolha: () => {
+      const livro = indices[versao()][escolhendo.l];
+      if (escolhendo.etapa === 'vers' && livro.caps.length > 1) escolhendo = { ...escolhendo, etapa: 'cap', c: null };
+      else escolhendo = { etapa: 'livro', test: escolhendo.test };
+    },
+    versiculo: el => abrirVersiculo({ l: escolhendo.l, c: escolhendo.c, v: Number(el.dataset.v) }),
+    recente: el => abrirVersiculo({ l: Number(el.dataset.l), c: Number(el.dataset.c), v: Number(el.dataset.v) }),
+  };
+
+  // Se já tem versículo na TV (na Palavra ou avulso), só pula para o novo e continua ali.
+  // Se não, abre como versículo avulso por cima da reunião.
+  function abrirVersiculo(ref) {
+    if (dados.versiculo) enviar({ cmd: 'irVersiculo', ...ref });
+    else enviar({ cmd: 'mostrarVersiculo', ref });
+    escolhendo = null;
+    palavraAberta = true;
   }
 
   app.addEventListener('click', ev => {
     const el = ev.target.closest('[data-cmd], [data-acao]');
     if (!el || el.disabled) return;
     const acao = el.dataset.acao;
-    if (acao === 'encerrar') { confirmarEncerrar = true; desenhar(true); return; }
-    if (acao === 'cancelar') { confirmarEncerrar = false; desenhar(true); return; }
-    if (acao === 'outras') { verOutras = !verOutras; desenhar(true); return; }
+    if (acao && ACOES[acao]) { ACOES[acao](el); desenhar(true); return; }
     const cmd = el.dataset.cmd;
-    if (cmd === 'encerrar') { confirmarEncerrar = false; }
-    if (cmd === 'mostrar') enviar({ cmd, itemId: el.dataset.item });
-    else if (cmd === 'escolherReuniao') enviar({ cmd, id: el.dataset.id });
-    else if (cmd === 'volume') enviar({ cmd, delta: Number(el.dataset.delta) });
+    if (!cmd) return;
+    if (cmd === 'encerrar') confirmarEncerrar = false;
+    if (cmd === 'escolherReuniao') enviar({ cmd, id: el.dataset.id });
+    else if (cmd === 'volume' || cmd === 'passoVersiculo') enviar({ cmd, delta: Number(el.dataset.delta) });
     else enviar({ cmd });
     if (cmd === 'encerrar') desenhar(true);
   });
+
+  window.addEventListener('resize', () => window.Versiculo.ajustar(app));
 
   // Tela do celular acesa (só funciona onde o navegador permite).
   async function manterAceso() {

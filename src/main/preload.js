@@ -2,10 +2,10 @@
 const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('notebook', {
-  importarDialogo: reuniaoId => ipcRenderer.invoke('importar-dialogo', { reuniaoId }),
+  importarDialogo: (reuniaoId, comoFundo) => ipcRenderer.invoke('importar-dialogo', { reuniaoId, comoFundo }),
   /** Arquivos arrastados para a janela. */
-  importarArquivos: (arquivos, reuniaoId) =>
-    ipcRenderer.invoke('importar-caminhos', { caminhos: Array.from(arquivos, f => webUtils.getPathForFile(f)), reuniaoId }),
+  importarArquivos: (arquivos, reuniaoId, comoFundo) =>
+    ipcRenderer.invoke('importar-caminhos', { caminhos: Array.from(arquivos, f => webUtils.getPathForFile(f)), reuniaoId, comoFundo }),
   trocarTelaEspera: () => ipcRenderer.invoke('trocar-tela-espera'),
   atualizarEndereco: () => ipcRenderer.invoke('atualizar-endereco'),
   trocarTelas: () => ipcRenderer.invoke('trocar-telas'),

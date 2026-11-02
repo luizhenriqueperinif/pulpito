@@ -9,7 +9,7 @@ Um culto da igreja, conduzido pelo pastor, formado por uma sequência ordenada d
 _Avoid_: Culto (a igreja diz "reunião" no dia a dia), apresentação, playlist
 
 **Item**:
-Uma parte da Reunião que aparece na TV: um vídeo, uma imagem, um versículo, uma música ou uma Pregação.
+Uma parte da Reunião que aparece na TV: um vídeo, uma imagem, a Palavra, uma música ou uma Pregação.
 _Avoid_: Slide, cena, mídia
 
 **Notebook**:
@@ -27,6 +27,14 @@ _Avoid_: Apresentação, PowerPoint, slides
 **Música**:
 Um áudio (hino, louvor ou fundo de oração) tocado como Item. Não tem imagem própria: o Telão continua mostrando o que já estava nele.
 _Avoid_: Faixa, louvor (como termo geral), playback
+
+**Palavra**:
+O Item que reúne, em ordem, todas as passagens da Bíblia preparadas para a Reunião. No Controle é um cartão só; dentro dele o Pastor passa os versículos e pula entre as passagens.
+_Avoid_: Leitura, Bíblia (como item), versículo planejado
+
+**Passagem**:
+Um trecho da Bíblia preparado dentro da Palavra, como Salmos 23:1-6. Cada versículo dele aparece numa tela.
+_Avoid_: Trecho, referência
 
 **Versão**:
 A tradução da Bíblia usada num versículo: ACF (padrão) ou NVI.

@@ -73,3 +73,47 @@ body { min-height: 100vh; min-height: 100dvh; }
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
 .overlay h2 { font-size: 28px; margin: 0; text-wrap: balance; }
 .overlay p { margin: 0; color: var(--muted); font-size: 19px; }
+
+/* Versículo na miniatura */
+.tv .vs { position: absolute; inset: 0; }
+
+/* Painéis por cima da reunião (escolher versículo, setas do versículo) */
+.painel { position: fixed; inset: 0; z-index: 15; background: var(--bg); display: flex; flex-direction: column; }
+.painel-topo {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--surface); border-bottom: 1px solid var(--line);
+  padding-top: max(10px, env(safe-area-inset-top, 0px)); padding-bottom: 10px;
+  padding-left: max(14px, env(safe-area-inset-left, 0px)); padding-right: max(14px, env(safe-area-inset-right, 0px));
+}
+.painel-topo h2 { margin: 0; font-size: 21px; min-width: 0; flex: 1; }
+.painel-topo .btn { min-height: 52px; font-size: 17px; padding: 6px 12px; }
+.painel-corpo {
+  flex: 1; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 14px;
+  padding-top: 14px; padding-bottom: max(18px, env(safe-area-inset-bottom, 0px));
+  padding-left: max(14px, env(safe-area-inset-left, 0px)); padding-right: max(14px, env(safe-area-inset-right, 0px));
+}
+.setas { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.setas .btn { min-height: 120px; font-size: 34px; flex-direction: column; gap: 6px; line-height: 1.1; }
+.setas small { font-size: 16px; font-weight: 700; }
+.grade2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.grade2 .btn { min-height: 60px; font-size: 18px; }
+.abas2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.abas2 .btn { min-height: 56px; font-size: 16px; }
+.abas2 .btn.sel { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.numeros { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.numeros .btn { min-height: 60px; font-size: 22px; padding: 0; font-variant-numeric: tabular-nums; }
+
+/* Palavra */
+.card.palavra .ic { background: var(--accent); color: var(--on-accent); }
+.card.palavra .d { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.passagens { display: grid; gap: 8px; }
+.passagens .btn { min-height: 60px; font-size: 19px; justify-content: flex-start; text-align: left; }
+.passagens .btn.sel { background: var(--live-bg); border-color: var(--live); border-width: 3px; color: var(--ink); }
+.numeros .btn.sel { background: var(--live); border-color: var(--live); color: var(--surface); }
+.numeros .btn.plan { border-color: var(--live); background: var(--live-bg); }
+.capbar { display: grid; grid-template-columns: 1fr 1.3fr 1fr; gap: 8px; }
+.capbar .btn { min-height: 76px; flex-direction: column; gap: 2px; font-size: 22px; line-height: 1.1; padding: 6px; }
+.capbar .btn small { font-size: 14px; font-weight: 700; }
+.capbar .btn.atual { font-size: 19px; font-weight: 700; border-color: var(--accent); }
+.capbar .btn.atual small { color: var(--muted); font-weight: 400; }
+/* Cada parte do painel mantém a própria altura (a mini TV não encolhe nem fica por cima dos botões). */
+.painel-corpo > * { flex-shrink: 0; }

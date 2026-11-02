@@ -3,15 +3,19 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const biblia = require('./biblia');
 
 const EXT_IMAGEM = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp'];
 const EXT_VIDEO = ['mp4', 'm4v', 'mov', 'webm', 'mkv'];
 /** Tipos que "Copiar reunião" leva junto (fotos e vídeos são da semana e não vêm). */
-const TIPOS_QUE_SE_REPETEM = ['musica', 'versiculo'];
+const TIPOS_QUE_SE_REPETEM = ['musica', 'palavra'];
 /** Tipos que "Apagar antigos" pode limpar. Músicas e Fundos nunca são apagados por ele. */
 const TIPOS_DA_SEMANA = ['imagem', 'video', 'pregacao'];
 const DIAS_PARA_ANTIGO = 7;
 const VERSOES = ['ACF', 'NVI'];
+/** Fundos de versículo que já vêm no programa (desenhados em src/web/comum/fundos.js). */
+const FUNDOS_PRONTOS = ['ceu', 'amanhecer', 'trigo', 'noite', 'oceano', 'pergaminho', 'vinho', 'floresta'];
+const FUNDO_PADRAO = 'ceu';
 
 function tipoDoArquivo(nome) {
   const ext = path.extname(nome).slice(1).toLowerCase();
@@ -63,6 +67,7 @@ class Dados {
         pastores: [],
         biblioteca: [],
         reunioes: [],
+        recentes: {},
       };
       this.d = d;
       this.salvar();
@@ -73,6 +78,8 @@ class Dados {
       this.d = d;
       this.salvar();
     }
+    d.recentes ??= {};
+    if (juntarVersiculosNaPalavra(d)) { this.d = d; this.salvar(); }
     return d;
   }
 
@@ -83,6 +90,20 @@ class Dados {
   }
 
   get config() { return this.d.config; }
+
+  // ---------- Últimos versículos usados (de cada pastor) ----------
+
+  lembrarVersiculo(pastorId, ref) {
+    const chave = pastorId || 'geral';
+    const igual = x => x.l === ref.l && x.c === ref.c && x.v === ref.v;
+    const lista = (this.d.recentes[chave] || []).filter(x => !igual(x));
+    this.d.recentes[chave] = [{ l: ref.l, c: ref.c, v: ref.v }, ...lista].slice(0, 6);
+    this.salvar();
+  }
+
+  recentes(pastorId) {
+    return this.d.recentes[pastorId || 'geral'] || [];
+  }
 
   // ---------- Pastores ----------
 
@@ -111,14 +132,16 @@ class Dados {
   arquivoDaBiblioteca(bid) { return this.d.biblioteca.find(b => b.id === bid); }
 
   /** Copia os arquivos para a Biblioteca, na ordem do nome (a ordem em que o WhatsApp salvou). */
-  importarArquivos(caminhos) {
+  importarArquivos(caminhos, { comoFundo = false } = {}) {
+    // Fundo de versículo só pode ser imagem.
+    const tipo = c => (comoFundo ? (tipoDoArquivo(c) === 'imagem' ? 'fundo' : null) : tipoDoArquivo(c));
     const aceitos = caminhos
-      .filter(c => tipoDoArquivo(c))
+      .filter(c => tipo(c))
       .sort((a, b) => path.basename(a).localeCompare(path.basename(b), 'pt-BR', { numeric: true }));
     const novos = aceitos.map(c => {
       const nome = id() + path.extname(c).toLowerCase();
       fs.copyFileSync(c, path.join(this.pastaMidia, nome));
-      return { id: id(), tipo: tipoDoArquivo(c), titulo: tituloDoArquivo(c), arquivo: nome, criadoEm: this.hoje() };
+      return { id: id(), tipo: tipo(c), titulo: tituloDoArquivo(c), arquivo: nome, criadoEm: this.hoje() };
     });
     this.d.biblioteca.push(...novos);
     this.salvar();
@@ -135,7 +158,7 @@ class Dados {
 
   /** Quantas reuniões usam este arquivo. */
   usos(bid) {
-    return this.d.reunioes.filter(r => r.itens.some(i => i.bibliotecaId === bid)).length;
+    return this.d.reunioes.filter(r => r.fundo === bid || r.itens.some(i => i.bibliotecaId === bid)).length;
   }
 
   /** Apaga o arquivo e o tira das reuniões que o usam. */
@@ -143,7 +166,10 @@ class Dados {
     const b = this.arquivoDaBiblioteca(bid);
     if (!b) return;
     this.d.biblioteca = this.d.biblioteca.filter(x => x.id !== bid);
-    for (const r of this.d.reunioes) r.itens = r.itens.filter(i => i.bibliotecaId !== bid);
+    for (const r of this.d.reunioes) {
+      r.itens = r.itens.filter(i => i.bibliotecaId !== bid);
+      if (r.fundo === bid) r.fundo = null;
+    }
     fs.rmSync(path.join(this.pastaMidia, b.arquivo), { force: true });
     this.salvar();
   }
@@ -175,22 +201,27 @@ class Dados {
   get reunioes() { return this.d.reunioes; }
   reuniao(rid) { return this.d.reunioes.find(r => r.id === rid); }
 
-  criarReuniao({ pastorId, data, hora, nome, copiarDe } = {}) {
+  criarReuniao({ pastorId, data, hora, nome, copiarDe, fundo } = {}) {
     const r = {
       id: id(),
       nome: String(nome || '').trim(),
       data: data || this.hoje(),
       hora: hora || '19:00',
       pastorId: pastorId || null,
+      fundo: fundo || null,
       itens: [],
     };
     const origem = copiarDe && this.reuniao(copiarDe);
     if (origem) {
       for (const it of origem.itens) {
-        const b = this.arquivoDaBiblioteca(it.bibliotecaId);
-        if (b && TIPOS_QUE_SE_REPETEM.includes(b.tipo)) r.itens.push({ ...it, id: id() });
+        const tipo = it.tipo || this.arquivoDaBiblioteca(it.bibliotecaId)?.tipo;
+        if (!TIPOS_QUE_SE_REPETEM.includes(tipo)) continue;
+        const copia = { ...structuredClone(it), id: id() };
+        if (copia.passagens) copia.passagens = copia.passagens.map(p => ({ ...p, id: id() }));
+        r.itens.push(copia);
       }
       if (!r.nome) r.nome = origem.nome;
+      if (!r.fundo) r.fundo = origem.fundo || null;
     }
     this.d.reunioes.push(r);
     this.salvar();
@@ -204,6 +235,52 @@ class Dados {
     if (campos.data) r.data = campos.data;
     if (campos.hora) r.hora = campos.hora;
     if ('pastorId' in campos) r.pastorId = campos.pastorId || null;
+    if ('fundo' in campos) r.fundo = campos.fundo || null;
+    this.salvar();
+  }
+
+  /**
+   * Versículo preparado: entra na Palavra da reunião (um item só, com as passagens em ordem).
+   * Se a reunião ainda não tem Palavra, ela é criada no fim.
+   * @param {{ ref: {l,c,v}, ate?: number, versao?: 'ACF'|'NVI'|null }} v
+   * @returns a passagem criada
+   */
+  adicionarVersiculo(rid, { ref, ate, versao }) {
+    const r = this.reuniao(rid);
+    if (!r || !ref) return null;
+    let palavra = r.itens.find(i => i.tipo === 'palavra');
+    if (!palavra) { palavra = { id: id(), tipo: 'palavra', passagens: [] }; r.itens.push(palavra); }
+    const p = {
+      id: id(),
+      ref: { l: Number(ref.l), c: Number(ref.c), v: Number(ref.v) },
+      ate: Math.max(Number(ate) || Number(ref.v), Number(ref.v)),
+      versao: VERSOES.includes(versao) ? versao : null,
+    };
+    palavra.passagens.push(p);
+    this.salvar();
+    return p;
+  }
+
+  _palavra(rid) { return this.reuniao(rid)?.itens.find(i => i.tipo === 'palavra'); }
+
+  moverPassagem(rid, passagemId, delta) {
+    const pal = this._palavra(rid);
+    if (!pal) return;
+    const i = pal.passagens.findIndex(p => p.id === passagemId);
+    const j = i + delta;
+    if (i < 0 || j < 0 || j >= pal.passagens.length) return;
+    const [p] = pal.passagens.splice(i, 1);
+    pal.passagens.splice(j, 0, p);
+    this.salvar();
+  }
+
+  /** Tira uma passagem. Se era a última, a Palavra sai da reunião. */
+  removerPassagem(rid, passagemId) {
+    const r = this.reuniao(rid);
+    const pal = this._palavra(rid);
+    if (!pal) return;
+    pal.passagens = pal.passagens.filter(p => p.id !== passagemId);
+    if (!pal.passagens.length) r.itens = r.itens.filter(i => i !== pal);
     this.salvar();
   }
 
@@ -247,11 +324,19 @@ class Dados {
   }
 
   _resolver(it) {
+    if (it.tipo === 'palavra') {
+      const passagens = it.passagens.map(p => {
+        const { l, c, v } = p.ref;
+        const titulo = `${biblia.nomeLivro(l)} ${c}:${v}${p.ate > v ? '-' + p.ate : ''}`;
+        return { id: p.id, titulo, ref: { ...p.ref }, ate: p.ate, versao: p.versao || null };
+      });
+      return { id: it.id, tipo: 'palavra', titulo: 'Palavra', passagens };
+    }
     const b = this.arquivoDaBiblioteca(it.bibliotecaId);
     return b ? { id: it.id, bibliotecaId: b.id, tipo: b.tipo, titulo: b.titulo, arquivo: b.arquivo } : null;
   }
 
-  /** Reunião pronta para as telas: com o pastor e os itens resolvidos. */
+  /** Reunião pronta para as telas: com o pastor, a versão, o fundo e os itens resolvidos. */
   reuniaoCompleta(rid) {
     const r = this.reuniao(rid);
     if (!r) return null;
@@ -260,8 +345,20 @@ class Dados {
       ...r,
       pastor: p ? p.nome : null,
       versao: p ? p.versao : 'ACF',
+      fundo: this.fundo(r.fundo),
+      fundoId: r.fundo || FUNDO_PADRAO,
       itens: r.itens.map(i => this._resolver(i)).filter(Boolean),
     };
+  }
+
+  /**
+   * Fundo dos versículos: um dos que já vêm no programa ({ pronto: 'ceu' })
+   * ou uma imagem da Biblioteca ({ arquivo }). Se sumiu, volta para o padrão.
+   */
+  fundo(fid) {
+    const arq = fid && this.arquivoDaBiblioteca(fid);
+    if (arq) return { arquivo: arq.arquivo };
+    return { pronto: FUNDOS_PRONTOS.includes(fid) ? fid : FUNDO_PADRAO };
   }
 
   /** Lista de reuniões em ordem de dia e horário. */
@@ -284,6 +381,25 @@ class Dados {
     this.salvar();
     if (antiga) fs.rmSync(path.join(this.pastaMidia, antiga), { force: true });
   }
+}
+
+/**
+ * Antes cada versículo era um item solto na reunião. Agora todos ficam dentro
+ * de um item "Palavra", no lugar onde estava o primeiro. Devolve true se mudou algo.
+ */
+function juntarVersiculosNaPalavra(d) {
+  let mudou = false;
+  for (const r of d.reunioes || []) {
+    const soltos = r.itens.filter(i => i.tipo === 'versiculo');
+    if (!soltos.length) continue;
+    const passagens = soltos.map(x => ({ id: x.id, ref: x.ref, ate: x.ate, versao: x.versao || null }));
+    const existente = r.itens.find(i => i.tipo === 'palavra');
+    if (existente) existente.passagens.push(...passagens);
+    else r.itens.splice(r.itens.indexOf(soltos[0]), 0, { id: id(), tipo: 'palavra', passagens });
+    r.itens = r.itens.filter(i => i.tipo !== 'versiculo');
+    mudou = true;
+  }
+  return mudou;
 }
 
 /** Versão 1 guardava os arquivos dentro de cada reunião. Agora vão para a Biblioteca. */
@@ -310,4 +426,4 @@ function migrarDaVersao1(v1) {
   };
 }
 
-module.exports = { Dados, tipoDoArquivo, tituloDoArquivo, somarDias, dataLocal, EXT_IMAGEM, EXT_VIDEO, VERSOES };
+module.exports = { Dados, tipoDoArquivo, tituloDoArquivo, somarDias, dataLocal, EXT_IMAGEM, EXT_VIDEO, VERSOES, FUNDOS_PRONTOS };

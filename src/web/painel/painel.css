@@ -120,3 +120,33 @@ main { padding: 24px; max-width: 1180px; margin: 0 auto; }
 
 .aviso-flutuante { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 40; background: var(--ink); color: var(--bg); padding: 12px 18px; border-radius: 12px; font-weight: 700; box-shadow: 0 8px 24px rgba(0,0,0,.25); max-width: 90vw; }
 .soltar { position: fixed; inset: 0; z-index: 50; background: rgba(31, 77, 156, .85); color: #fff; display: grid; place-items: center; font-size: 36px; font-weight: 700; pointer-events: none; }
+
+/* Etapa 3: versículos e fundos */
+.palco .vs { width: 100%; height: 100%; position: relative; }
+.bolinha { display: inline-block; width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--line); vertical-align: middle; }
+.busca { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: end; }
+.busca .btn { min-height: 52px; }
+.trilha { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--muted); }
+.trilha .btn.sel, .nums .btn.sel { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.trilha .btn:disabled { opacity: 1; }
+.livros { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; }
+.livros .btn { min-height: 52px; font-size: 17px; justify-content: flex-start; }
+.nums { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 8px; }
+.nums .btn { min-height: 52px; font-size: 19px; padding: 0; font-variant-numeric: tabular-nums; }
+.previa-verso { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.previa-verso .textos { margin: 0; padding-left: 28px; display: grid; gap: 6px; max-height: 320px; overflow: auto; }
+@media (max-width: 800px) { .previa-verso { grid-template-columns: 1fr; } }
+.t-grande { font-size: 19px; font-weight: 700; }
+.fundos { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.fundo-op { display: grid; padding: 0; border: 3px solid var(--line); border-radius: var(--radius); overflow: hidden; background: var(--surface); cursor: pointer; font: inherit; color: inherit; text-align: left; }
+.fundo-op.sel { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent); }
+.fundo-op .amostra { display: block; position: relative; aspect-ratio: 16 / 9; }
+.fundo-op .amostra .vs { position: absolute; inset: 0; }
+.fundo-op .nome { padding: 10px 12px; font-weight: 700; }
+
+/* Palavra: passagens dentro do item */
+.item .passagens { grid-column: 2 / -1; display: grid; gap: 6px; border-top: 1px dashed var(--line); padding-top: 10px; }
+.passagem { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 10px; align-items: center; background: var(--surface-2); border-radius: 10px; padding: 6px 10px; }
+.passagem .pn { font-weight: 700; color: var(--muted); }
+.passagem .t { font-size: 17px; }
+.passagem .acoes .btn { min-height: 42px; min-width: 46px; }

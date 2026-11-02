@@ -2,7 +2,7 @@
 (function () {
   const $ = id => document.getElementById(id);
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  const TIPO = { imagem: 'Imagem', video: 'Vídeo' };
+  const TIPO = { imagem: 'Imagem', video: 'Vídeo', palavra: 'Palavra', fundo: 'Fundo' };
 
   let M = null;                 // último pacote do Notebook
   let chaveDados = '';
@@ -17,7 +17,21 @@
     escolher: null,             // { aba, sel: Set } janela "Da Biblioteca"
     testar: null,               // índice do item no "Testar"
     pastorForm: null,           // { id?, nome, versao }
+    verso: null,                // janela "+ Versículo": { etapa, test, l, c, de, sel, versao }
+    fundo: false,               // janela "Fundo dos versículos"
+    previaTestar: null,         // texto do versículo no "Testar"
   };
+  const ULTIMO_DO_AT = 38;
+  const indices = {};
+  function indice(v) {
+    if (indices[v] && indices[v] !== 'carregando') return indices[v];
+    if (!indices[v]) {
+      indices[v] = 'carregando';
+      fetch(`/api/biblia?t=${encodeURIComponent(conexao.token)}&v=${v}`).then(r => r.json()).then(j => { indices[v] = j; desenhar(); });
+    }
+    return null;
+  }
+  const textoApi = (v, r) => fetch(`/api/texto?t=${encodeURIComponent(conexao.token)}&v=${v}&l=${r.l}&c=${r.c}&de=${r.v}&ate=${r.ate || r.v}`).then(x => x.json());
 
   // ---------- conexão ----------
   let seq = 0;
@@ -97,7 +111,8 @@
     else if (S.aba === 'biblioteca') html = biblioteca();
     else if (S.aba === 'config') html = configuracoes();
     $('conteudo').innerHTML = html;
-    $('modal').innerHTML = S.escolher ? janelaEscolher() : S.testar != null ? janelaTestar() : '';
+    $('modal').innerHTML = S.escolher ? janelaEscolher() : S.testar != null ? janelaTestar() : S.verso ? janelaVerso() : S.fundo ? janelaFundo() : '';
+    window.Versiculo.ajustar(document.body);
     const v = document.querySelector('#modal video'); if (v) v.volume = 0.5;
   }
   document.addEventListener('focusout', () => setTimeout(() => { if (precisaDesenhar) desenhar(); }, 0));
@@ -173,10 +188,26 @@
   }
 
   // ---------- Reuniões: montar uma reunião ----------
+  function fundoCss(f) { return window.Versiculo.estiloFundo(f, midia).bg; }
   function miniatura(it) {
+    if (it.tipo === 'palavra') return `<div class="miniatura" style='background:${fundoCss(reuniaoAberta()?.fundo)}'>📖</div>`;
+    if (it.tipo === 'fundo') return `<div class="miniatura" style='background:${fundoCss({ arquivo: it.arquivo })}'></div>`;
     if (it.tipo === 'imagem') return `<div class="miniatura"><img src="${midia(it.arquivo)}" alt="" loading="lazy" draggable="false"></div>`;
     if (it.tipo === 'video') return `<div class="miniatura"><video src="${midia(it.arquivo)}#t=1" preload="metadata" muted draggable="false"></video></div>`;
     return `<div class="miniatura">•</div>`;
+  }
+
+  function linhasPassagens(it, r) {
+    const n = it.passagens.length;
+    return `<div class="passagens">${it.passagens.map((p, i) => `<div class="passagem">
+        <span class="pn">${i + 1}.</span>
+        <div><div class="t">${esc(p.titulo)}</div><div class="d">${p.ate > p.ref.v ? `${p.ate - p.ref.v + 1} versículos, um por tela` : '1 versículo'} · Bíblia ${p.versao ? p.versao : `${r.versao} (do pastor)`}</div></div>
+        <div class="acoes">
+          <button class="btn sm" data-a="moverPassagem" data-v="${p.id}" data-d="-1" ${i === 0 ? 'disabled' : ''} aria-label="Subir">↑</button>
+          <button class="btn sm" data-a="moverPassagem" data-v="${p.id}" data-d="1" ${i === n - 1 ? 'disabled' : ''} aria-label="Descer">↓</button>
+          <button class="btn sm danger" data-a="tirarPassagem" data-v="${p.id}" aria-label="Tirar versículo">🗑</button>
+        </div></div>`).join('')}
+      <div><button class="btn sm" data-a="abrirVerso">📖 + Outro versículo</button></div></div>`;
   }
 
   function editor() {
@@ -184,12 +215,14 @@
     const naTv = M.estado.reuniaoId === r.id && M.estado.tv.tipo === 'item' ? M.estado.tv.itemId : null;
     const itens = r.itens.map((it, i) => `<div class="item ${naTv === it.id ? 'na-tv' : ''}" draggable="true" data-item="${it.id}" title="Arraste para mudar a ordem">
         <span class="n"><span class="alca" aria-hidden="true">⠿</span><span class="num">${i + 1}</span></span>${miniatura(it)}
-        <div><div class="t">${esc(it.titulo)}</div><div class="d">${TIPO[it.tipo] || it.tipo}${naTv === it.id ? ' · <span class="ao-vivo">na TV agora</span>' : ''}</div></div>
+        <div><div class="t">${it.tipo === 'palavra' ? '📖 Palavra' : esc(it.titulo)}</div><div class="d">${it.tipo === 'palavra'
+          ? `${it.passagens.length} ${it.passagens.length === 1 ? 'passagem' : 'passagens'} · no celular é um cartão só, com as setas ◀ ▶`
+          : TIPO[it.tipo] || it.tipo}${naTv === it.id ? ' · <span class="ao-vivo">na TV agora</span>' : ''}</div></div>
         <div class="acoes">
           <button class="btn" data-a="mover" data-v="${it.id}" data-d="-1" ${i === 0 ? 'disabled' : ''} aria-label="Subir">↑</button>
           <button class="btn" data-a="mover" data-v="${it.id}" data-d="1" ${i === r.itens.length - 1 ? 'disabled' : ''} aria-label="Descer">↓</button>
           <button class="btn danger" data-a="tirar" data-v="${it.id}" aria-label="Tirar da reunião">🗑</button>
-        </div></div>`).join('');
+        </div>${it.tipo === 'palavra' ? linhasPassagens(it, r) : ''}</div>`).join('');
 
     return `<div class="pagina">
       <div><button class="btn sm" data-a="fechar">◀ Todas as reuniões</button></div>
@@ -200,12 +233,14 @@
         </div>
         <div class="acoes">
           <button class="btn" data-a="editarDados">✏️ Mudar dia, hora ou pastor</button>
+          <button class="btn" data-a="abrirFundo"><span class="bolinha" style='background:${fundoCss(r.fundo)}'></span> Fundo dos versículos</button>
           <button class="btn primary" data-a="testar" ${r.itens.length ? '' : 'disabled'}>▶ Testar</button>
         </div></div>`}
       ${r.itens.length ? `<div class="itens">${itens}</div>` : `<div class="vazio"><div class="grande">📭</div><div>Esta reunião ainda está vazia.</div></div>`}
       <div class="adicionar">
         <div class="acoes">
           <button class="btn primary huge" data-a="importar">+ Fotos e vídeos do computador</button>
+          <button class="btn primary huge" data-a="abrirVerso">📖 + Versículo</button>
           <button class="btn huge" data-a="daBiblioteca">🗂️ Da Biblioteca</button>
         </div>
         <p class="note">Ou arraste os arquivos para esta janela. Eles entram no fim da lista, na ordem do WhatsApp.
@@ -240,6 +275,7 @@
     return `<div class="sub-abas">
       <button class="btn ${atual === 'video' ? 'sel' : ''}" data-a="${acao}" data-v="video">🎬 Vídeos (${qtd('video')})</button>
       <button class="btn ${atual === 'imagem' ? 'sel' : ''}" data-a="${acao}" data-v="imagem">🖼️ Imagens (${qtd('imagem')})</button>
+      ${acao === 'bibAba' ? `<button class="btn ${atual === 'fundo' ? 'sel' : ''}" data-a="${acao}" data-v="fundo">🎨 Fundos de versículo (${qtd('fundo')})</button>` : ''}
     </div>`;
   }
 
@@ -249,13 +285,13 @@
     return `<div class="pagina">
       <div class="cabeca"><h1>Biblioteca</h1>
         <div class="acoes">
-          <button class="btn primary" data-a="importar">+ Adicionar arquivos</button>
+          <button class="btn primary" data-a="importar">${S.bibAba === 'fundo' ? '+ Adicionar imagem de fundo' : '+ Adicionar arquivos'}</button>
           <button class="btn danger" data-a="apagarAntigos" ${antigos ? '' : 'disabled'}>🗑 Apagar antigos (${antigos})</button>
         </div></div>
       <p class="note">"Apagar antigos" apaga fotos e vídeos que não foram usados nos últimos 7 dias e não estão em nenhuma reunião de hoje em diante.</p>
       ${subAbas(S.bibAba, 'bibAba')}
       ${lista.length ? `<div class="grade">${lista.map(b => cartaoArquivo(b)).join('')}</div>`
-        : `<div class="vazio"><div class="grande">🗂️</div><div>Nenhum${S.bibAba === 'video' ? ' vídeo' : 'a imagem'} ainda.</div></div>`}
+        : `<div class="vazio"><div class="grande">${S.bibAba === 'fundo' ? '🎨' : '🗂️'}</div><div>${S.bibAba === 'video' ? 'Nenhum vídeo ainda.' : S.bibAba === 'fundo' ? 'Nenhum fundo próprio ainda. Os fundos que vêm no programa aparecem na hora de escolher o fundo da reunião.' : 'Nenhuma imagem ainda.'}</div></div>`}
     </div>`;
   }
 
@@ -272,22 +308,129 @@
     </div></div>`;
   }
 
+  /** No "Testar", cada passagem da Palavra é uma tela. */
+  const telasDoTestar = r => r.itens.flatMap(it => (it.tipo === 'palavra' ? it.passagens.map(p => ({ it, p })) : [{ it }]));
+
   function janelaTestar() {
     const r = M.reunioesCompletas.find(x => x.id === S.aberta);
-    if (!r || !r.itens.length) { S.testar = null; return ''; }
-    const i = Math.max(0, Math.min(r.itens.length - 1, S.testar));
-    const it = r.itens[i];
-    const palco = it.tipo === 'imagem'
-      ? `<img src="${midia(it.arquivo)}" alt="">`
-      : `<video src="${midia(it.arquivo)}" controls autoplay></video>`;
+    const telas = r ? telasDoTestar(r) : [];
+    if (!telas.length) { S.testar = null; return ''; }
+    const i = Math.max(0, Math.min(telas.length - 1, S.testar));
+    const { it, p } = telas[i];
+    let palco;
+    if (p) {
+      const versao = p.versao || r.versao;
+      const chave = p.id + versao;
+      if (!S.previaTestar || S.previaTestar.chave !== chave) {
+        S.previaTestar = { chave, texto: '…' };
+        textoApi(versao, { ...p.ref, ate: p.ref.v }).then(t => { if (S.previaTestar?.chave === chave) { S.previaTestar.texto = t[0]?.texto || ''; desenhar(); } });
+      }
+      const rot = `${p.titulo.replace(/:\d+(-\d+)?$/, '')}:${p.ref.v}`;
+      palco = window.Versiculo.html({ texto: S.previaTestar.texto, rotulo: rot, versao, fundo: r.fundo }, midia);
+    } else {
+      palco = it.tipo === 'imagem'
+        ? `<img src="${midia(it.arquivo)}" alt="">`
+        : `<video src="${midia(it.arquivo)}" controls autoplay></video>`;
+    }
     return `<div class="fundo-modal"><div class="janela" role="dialog" aria-label="Testar a reunião">
-      <header><h2>Testar · ${i + 1} de ${r.itens.length}: ${esc(it.titulo)}</h2><button class="btn sm" data-a="fecharModal">✕ Fechar</button></header>
+      <header><h2>Testar · ${i + 1} de ${telas.length}: ${p ? 'Palavra · ' + esc(p.titulo) : esc(it.titulo)}</h2><button class="btn sm" data-a="fecharModal">✕ Fechar</button></header>
       <div class="corpo"><div class="palco">${palco}</div>
-        <p class="note">Assim aparece na TV. Este teste não mexe na TV da igreja.</p></div>
+        <p class="note">Assim aparece na TV. Este teste não mexe na TV da igreja.${p ? ' No culto, as setas do celular passam pelos outros versículos.' : ''}</p></div>
       <footer>
         <button class="btn" data-a="testarPasso" data-v="-1" ${i === 0 ? 'disabled' : ''}>◀ Anterior</button>
-        <button class="btn primary" data-a="testarPasso" data-v="1" ${i === r.itens.length - 1 ? 'disabled' : ''}>Próximo ▶</button>
+        <button class="btn primary" data-a="testarPasso" data-v="1" ${i === telas.length - 1 ? 'disabled' : ''}>Próximo ▶</button>
       </footer></div></div>`;
+  }
+
+  // ---------- "+ Versículo" ----------
+  const EXEMPLO_FUNDO = { texto: 'O Senhor é o meu pastor; nada me faltará.', rotulo: 'Salmos 23:1' };
+  function versaoDoVerso() { return S.verso.versao || reuniaoAberta()?.versao || 'ACF'; }
+  function textosDoVerso() {
+    const v = S.verso;
+    if (v.l == null || v.c == null || v.de == null) return null;
+    const ate = v.ate || v.de;
+    const chave = [versaoDoVerso(), v.l, v.c, v.de, ate].join('|');
+    if (v.chave !== chave) {
+      v.chave = chave; v.textos = null;
+      textoApi(versaoDoVerso(), { l: v.l, c: v.c, v: v.de, ate }).then(t => { if (S.verso?.chave === chave) { S.verso.textos = t; desenhar(); } });
+    }
+    return v.textos;
+  }
+  function janelaVerso() {
+    const v = S.verso;
+    const r = reuniaoAberta();
+    const idx = indice(versaoDoVerso());
+    const cab = `<header><h2>📖 Colocar versículo na reunião</h2><button class="btn sm" data-a="fecharModal">✕ Fechar</button></header>`;
+    if (!idx || !r) return `<div class="fundo-modal"><div class="janela">${cab}<div class="corpo"><div class="vazio">Abrindo a Bíblia…</div></div></div></div>`;
+    const livro = v.l != null ? idx[v.l] : null;
+
+    // Trilha: Livro › Capítulo › Versículos (tocar numa parte volta para ela)
+    const trilha = `<div class="trilha">
+      <button class="btn sm ${v.l == null ? 'sel' : ''}" data-a="versoVoltar" data-v="livro">${livro ? esc(livro.nome) : 'Livro'}</button><span>›</span>
+      <button class="btn sm ${v.l != null && v.c == null ? 'sel' : ''}" data-a="versoVoltar" data-v="cap" ${livro ? '' : 'disabled'}>${v.c ? 'Capítulo ' + v.c : 'Capítulo'}</button><span>›</span>
+      <button class="btn sm ${v.c != null ? 'sel' : ''}" disabled>Versículos</button></div>`;
+
+    let escolha;
+    if (!livro) {
+      const lista = idx.filter(b => v.test === 'NT' ? b.l > ULTIMO_DO_AT : b.l <= ULTIMO_DO_AT);
+      escolha = `<div class="sub-abas">
+          <button class="btn ${v.test !== 'NT' ? 'sel' : ''}" data-a="versoTest" data-v="AT">Antigo Testamento</button>
+          <button class="btn ${v.test === 'NT' ? 'sel' : ''}" data-a="versoTest" data-v="NT">Novo Testamento</button></div>
+        <div class="livros">${lista.map(b => `<button class="btn" data-a="versoLivro" data-v="${b.l}">${esc(b.nome)}</button>`).join('')}</div>`;
+    } else if (v.c == null) {
+      escolha = `<div class="nums">${livro.caps.map((_, i) => `<button class="btn" data-a="versoCap" data-v="${i + 1}">${i + 1}</button>`).join('')}</div>`;
+    } else {
+      const qtd = livro.caps[v.c - 1] || 0;
+      const fim = v.ate || v.de;
+      escolha = `<p class="note">Toque no versículo. Para pegar vários (um por tela), toque também no último.</p>
+        <div class="nums">${Array.from({ length: qtd }, (_, i) => i + 1).map(n => {
+          const dentro = v.de != null && n >= v.de && n <= fim;
+          return `<button class="btn ${dentro ? 'sel' : ''}" data-a="versoNum" data-v="${n}">${n}</button>`;
+        }).join('')}</div>`;
+    }
+
+    const textos = textosDoVerso();
+    const ate = v.ate || v.de;
+    const rotulo = livro && v.c && v.de ? `${livro.nome} ${v.c}:${v.de}${ate > v.de ? '-' + ate : ''}` : '';
+    const previa = rotulo ? `<div class="previa-verso">
+        <div class="palco">${window.Versiculo.html({ texto: textos ? (textos[0]?.texto || '') : '…', rotulo: `${livro.nome} ${v.c}:${v.de}`, versao: versaoDoVerso(), fundo: r.fundo }, midia)}</div>
+        ${textos && textos.length > 1 ? `<ol class="textos">${textos.map(t => `<li value="${t.v}">${esc(t.texto)}</li>`).join('')}</ol>` : ''}
+      </div>` : '';
+
+    const opcoesVersao = [[null, `Do pastor (${r.versao})`], ['ACF', 'ACF'], ['NVI', 'NVI']];
+    return `<div class="fundo-modal"><div class="janela" role="dialog" aria-label="Colocar versículo">${cab}
+      <div class="corpo">
+        <form id="form-verso" class="busca" autocomplete="off">
+          <label class="campo"><span>Já sabe qual é? Escreva aqui</span>
+            <input type="text" id="v-busca" placeholder="Ex.: Salmos 23:1-6   ou   Jo 3:16" value="${esc(v.busca || '')}"></label>
+          <button type="submit" class="btn primary">Achar</button></form>
+        <p class="note">Ou escolha tocando:</p>
+        ${trilha}${escolha}${previa}
+        <div class="campo"><span>Bíblia</span><div class="escolha">
+          ${opcoesVersao.map(([val, nome]) => `<button type="button" class="btn ${v.versao === val ? 'sel' : ''}" data-a="versoVersao" data-v="${val || ''}">${nome}</button>`).join('')}
+        </div></div>
+      </div>
+      <footer><span class="t-grande">${rotulo ? esc(rotulo) + (ate > v.de ? ` · ${ate - v.de + 1} versículos` : '') : '<span class="note">Nenhum versículo escolhido ainda</span>'}</span>
+        <button class="btn primary" data-a="versoColocar" ${rotulo ? '' : 'disabled'}>Colocar na reunião</button></footer>
+    </div></div>`;
+  }
+
+  // ---------- "Fundo dos versículos" ----------
+  function janelaFundo() {
+    const r = reuniaoAberta();
+    if (!r) { S.fundo = false; return ''; }
+    const proprios = M.biblioteca.filter(b => b.tipo === 'fundo');
+    const opcoes = window.Versiculo.FUNDOS.map(f => ({ id: f.id, nome: f.nome, fundo: { pronto: f.id } }))
+      .concat(proprios.map(b => ({ id: b.id, nome: b.titulo, fundo: { arquivo: b.arquivo } })));
+    const tile = o => `<button class="fundo-op ${r.fundoId === o.id ? 'sel' : ''}" data-a="escolherFundo" data-v="${o.id}">
+        <span class="amostra">${window.Versiculo.html({ ...EXEMPLO_FUNDO, fundo: o.fundo }, midia)}</span>
+        <span class="nome">${r.fundoId === o.id ? '✓ ' : ''}${esc(o.nome)}</span></button>`;
+    return `<div class="fundo-modal"><div class="janela" role="dialog" aria-label="Fundo dos versículos">
+      <header><h2>🎨 Fundo dos versículos desta reunião</h2><button class="btn sm" data-a="fecharModal">✕ Fechar</button></header>
+      <div class="corpo"><p class="note">Toque no fundo que você quer. Todos os versículos desta reunião aparecem com ele, inclusive os escolhidos na hora pelo celular.</p>
+        <div class="fundos">${opcoes.map(tile).join('')}</div></div>
+      <footer><button class="btn" data-a="importar">+ Usar uma imagem minha</button><button class="btn primary" data-a="fecharModal">Pronto</button></footer>
+    </div></div>`;
   }
 
   // ---------- Configurações ----------
@@ -378,9 +521,16 @@
     },
     verAnteriores: () => { S.verAnteriores = !S.verAnteriores; },
     mover: (v, el) => enviar({ cmd: 'moverItem', reuniaoId: S.aberta, itemId: v, delta: Number(el.dataset.d) }),
-    tirar: v => enviar({ cmd: 'removerItem', reuniaoId: S.aberta, itemId: v }),
+    tirar: v => {
+      const it = reuniaoAberta()?.itens.find(i => i.id === v);
+      if (it && it.tipo === 'palavra' && it.passagens.length > 1 && !confirm(`Tirar a Palavra inteira (${it.passagens.length} passagens) da reunião?`)) return;
+      enviar({ cmd: 'removerItem', reuniaoId: S.aberta, itemId: v });
+    },
+    moverPassagem: (v, el) => enviar({ cmd: 'moverPassagem', reuniaoId: S.aberta, passagemId: v, delta: Number(el.dataset.d) }),
+    tirarPassagem: v => enviar({ cmd: 'removerPassagem', reuniaoId: S.aberta, passagemId: v }),
     importar: async () => {
-      const r = await window.notebook.importarDialogo(S.aba === 'reunioes' ? S.aberta : null);
+      const comoFundo = (S.aba === 'biblioteca' && S.bibAba === 'fundo') || S.fundo;
+      const r = await window.notebook.importarDialogo(S.aba === 'reunioes' && !comoFundo ? S.aberta : null, comoFundo);
       avisarImportacao(r);
     },
     daBiblioteca: () => { S.escolher = { aba: 'video', sel: new Set() }; },
@@ -391,8 +541,38 @@
       avisar(`${S.escolher.sel.size} colocado(s) na reunião.`);
       S.escolher = null;
     },
-    fecharModal: () => { S.escolher = null; S.testar = null; },
+    fecharModal: () => { S.escolher = null; S.testar = null; S.verso = null; S.fundo = false; },
     testar: () => { S.testar = 0; },
+    abrirVerso: () => { S.verso = { test: 'AT', l: null, c: null, de: null, ate: null, versao: null, busca: '' }; setTimeout(() => $('v-busca')?.focus()); },
+    versoTest: v => { S.verso.test = v; },
+    versoLivro: v => {
+      S.verso.l = Number(v); S.verso.c = null; S.verso.de = S.verso.ate = null;
+      const b = indice(versaoDoVerso())[S.verso.l];
+      if (b.caps.length === 1) S.verso.c = 1;  // Judas, Obadias…: vai direto aos versículos
+    },
+    versoCap: v => { S.verso.c = Number(v); S.verso.de = S.verso.ate = null; },
+    versoNum: v => {
+      const n = Number(v), x = S.verso;
+      // 1º toque: começo. 2º toque depois dele: fim. Outro toque: recomeça.
+      if (x.de == null || x.ate != null || n <= x.de) { x.de = n; x.ate = null; } else x.ate = n;
+    },
+    versoVoltar: v => {
+      if (v === 'livro') S.verso.l = null;
+      S.verso.c = null; S.verso.de = S.verso.ate = null;
+    },
+    versoVersao: v => { S.verso.versao = v || null; },
+    versoColocar: () => {
+      const x = S.verso;
+      enviar({ cmd: 'adicionarVersiculo', reuniaoId: S.aberta, ref: { l: x.l, c: x.c, v: x.de }, ate: x.ate || x.de, versao: x.versao });
+      avisar('Versículo colocado na Palavra.');
+      S.verso = null;
+    },
+    abrirFundo: () => { S.fundo = true; },
+    escolherFundo: v => {
+      const r = reuniaoAberta();
+      r.fundoId = v;  // já mostra marcado enquanto o notebook grava
+      enviar({ cmd: 'editarReuniao', id: S.aberta, campos: { fundo: v } });
+    },
     testarPasso: v => { S.testar += Number(v); },
     bibAba: v => { S.bibAba = v; S.renomear = null; },
     renomear: v => { S.renomear = v; setTimeout(() => { const i = $('renomear-' + v); if (i) { i.focus(); i.select(); } }); },
@@ -457,6 +637,20 @@
       }
       document.activeElement?.blur();
       desenhar();
+    } else if (f.id === 'form-verso') {
+      const texto = $('v-busca').value;
+      S.verso.busca = texto;
+      const idx = indice(versaoDoVerso());
+      const ref = idx && window.Referencia.interpretar(texto, idx);
+      document.activeElement?.blur();
+      if (!ref) { avisar('Não entendi. Escreva assim: Salmos 23:1-6 ou João 3:16'); desenhar(); return; }
+      const qtdCaps = idx[ref.l].caps.length;
+      if (ref.c > qtdCaps) { avisar(`${idx[ref.l].nome} tem só ${qtdCaps} capítulos.`); desenhar(); return; }
+      const qtd = idx[ref.l].caps[ref.c - 1];
+      if (ref.v > qtd) { avisar(`${idx[ref.l].nome} ${ref.c} tem só ${qtd} versículos.`); desenhar(); return; }
+      const ate = Math.min(ref.ate, qtd);
+      Object.assign(S.verso, { test: ref.l > ULTIMO_DO_AT ? 'NT' : 'AT', l: ref.l, c: ref.c, de: ref.v, ate: ate > ref.v ? ate : null });
+      desenhar();
     } else if (f.id === 'form-pastor') {
       const nome = $('p-nome').value.trim();
       if (!nome) { avisar('Escreva o nome do pastor.'); return; }
@@ -470,10 +664,11 @@
   });
 
   document.addEventListener('keydown', ev => {
-    if (ev.key === 'Escape' && (S.escolher || S.testar != null)) { ACOES.fecharModal(); desenhar(); }
+    if (ev.key === 'Escape' && (S.escolher || S.testar != null || S.verso || S.fundo)) { ACOES.fecharModal(); desenhar(); }
     if (ev.key === 'Escape' && S.renomear) { S.renomear = null; desenhar(); }
     if (S.testar != null && (ev.key === 'ArrowRight' || ev.key === 'ArrowLeft')) {
-      const n = reuniaoAberta()?.itens.length || 0;
+      const r = reuniaoAberta();
+      const n = r ? telasDoTestar(r).length : 0;
       const novo = S.testar + (ev.key === 'ArrowRight' ? 1 : -1);
       if (novo >= 0 && novo < n) { S.testar = novo; desenhar(); }
     }
@@ -546,7 +741,8 @@
     arrastando = 0; $('soltar').hidden = true;
     const destino = S.aba === 'reunioes' && S.aberta ? S.aberta : null;
     if (!destino && S.aba !== 'biblioteca') { S.aba = 'biblioteca'; desenhar(); }
-    avisarImportacao(await window.notebook.importarArquivos(ev.dataTransfer.files, destino));
+    const comoFundo = (S.aba === 'biblioteca' && S.bibAba === 'fundo') || S.fundo;
+    avisarImportacao(await window.notebook.importarArquivos(ev.dataTransfer.files, comoFundo ? null : destino, comoFundo));
   });
 
   desenhar();

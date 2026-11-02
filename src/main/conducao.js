@@ -5,13 +5,21 @@
 const VOLUME_MAX = 10;
 
 function estadoInicial(volume = 7) {
-  return { reuniaoId: null, tv: { tipo: 'espera' }, tvAntesPreto: null, video: null, volume };
+  return { reuniaoId: null, tv: { tipo: 'espera' }, tvAntesPreto: null, tvAntesAvulso: null, video: null, volume };
 }
+
+const refValida = r => r && Number.isInteger(r.l) && Number.isInteger(r.c) && Number.isInteger(r.v);
 
 /**
  * @param {object} e  estado atual
  * @param {object} cmd  { cmd: string, ... }
- * @param {{ item(reuniaoId, itemId): object|undefined, reuniaoExiste(id): boolean }} ctx
+ * @param {{
+ *   item(reuniaoId, itemId): object|undefined,
+ *   reuniaoExiste(id): boolean,
+ *   versao(e): string,                       versão da Bíblia do que está na TV
+ *   existe(versao, ref): boolean,
+ *   vizinho(versao, ref, delta): object|null
+ * }} ctx
  */
 function aplicar(e, cmd, ctx) {
   switch (cmd.cmd) {
@@ -24,17 +32,81 @@ function aplicar(e, cmd, ctx) {
       const it = e.reuniaoId && ctx.item(e.reuniaoId, cmd.itemId);
       if (!it) return e;
       const jaNaTv = e.tv.tipo === 'item' && e.tv.itemId === it.id;
-      // Toque repetido no que já está na TV não faz nada (um vídeo não recomeça sem querer).
+      // Toque repetido no que já está na TV não faz nada (um vídeo não recomeça,
+      // um versículo não volta para o começo).
       if (jaNaTv) return e;
       const inicio = (e.video?.inicio ?? 0) + 1;
+      let tv = { tipo: 'item', itemId: it.id };
+      if (it.tipo === 'palavra') {
+        // A Palavra começa na primeira passagem preparada.
+        const p = it.passagens[0];
+        if (!p) return e;
+        tv = { tipo: 'item', itemId: it.id, passagemId: p.id, ref: { ...p.ref } };
+      }
       return {
         ...e,
-        tv: { tipo: 'item', itemId: it.id },
+        tv,
         tvAntesPreto: null,
+        tvAntesAvulso: null,
         video: it.tipo === 'video'
           ? { itemId: it.id, tocando: true, t: 0, dur: null, terminou: false, inicio }
           : null,
       };
+    }
+
+    case 'mostrarPassagem': {
+      // Dentro da Palavra: pula para uma das passagens preparadas (sempre no começo dela).
+      const it = e.reuniaoId && ctx.item(e.reuniaoId, cmd.itemId);
+      const p = it && it.tipo === 'palavra' && it.passagens.find(x => x.id === cmd.passagemId);
+      if (!p) return e;
+      return {
+        ...e,
+        tv: { tipo: 'item', itemId: it.id, passagemId: p.id, ref: { ...p.ref } },
+        tvAntesPreto: null,
+        tvAntesAvulso: null,
+        video: null,
+      };
+    }
+
+    case 'mostrarVersiculo': {
+      // Versículo avulso: escolhido na hora, por cima da reunião.
+      const ref = cmd.ref && { l: Number(cmd.ref.l), c: Number(cmd.ref.c), v: Number(cmd.ref.v) };
+      if (!refValida(ref)) return e;
+      const versao = ctx.versao({ ...e, tv: { tipo: 'avulso', ref } });
+      if (!ctx.existe(versao, ref)) return e;
+      let antes = e.tvAntesAvulso;
+      if (e.tv.tipo !== 'avulso') antes = e.tv.tipo === 'preto' ? (e.tvAntesPreto ?? { tipo: 'espera' }) : e.tv;
+      return {
+        ...e,
+        tv: { tipo: 'avulso', ref },
+        tvAntesAvulso: antes,
+        tvAntesPreto: null,
+        video: e.video ? { ...e.video, tocando: false } : null,
+      };
+    }
+
+    case 'passoVersiculo': {
+      // ◀ ▶ livres: valem para o avulso e para o versículo planejado.
+      if (!e.tv.ref) return e;
+      const prox = ctx.vizinho(ctx.versao(e), e.tv.ref, Number(cmd.delta) || 0);
+      if (!prox) return e;
+      return { ...e, tv: { ...e.tv, ref: prox } };
+    }
+
+    case 'irVersiculo': {
+      // Pula para outro versículo (outro número, capítulo ou livro) sem sair da Palavra (ou do avulso).
+      // Sem l/c, fica no mesmo livro e capítulo.
+      if (!e.tv.ref) return e;
+      const ref = { l: cmd.l ?? e.tv.ref.l, c: cmd.c ?? e.tv.ref.c, v: cmd.v ?? 1 };
+      for (const k of ['l', 'c', 'v']) ref[k] = Number(ref[k]);
+      const igual = ref.l === e.tv.ref.l && ref.c === e.tv.ref.c && ref.v === e.tv.ref.v;
+      if (igual || !refValida(ref) || !ctx.existe(ctx.versao(e), ref)) return e;
+      return { ...e, tv: { ...e.tv, ref } };
+    }
+
+    case 'voltarReuniao': {
+      if (e.tv.tipo !== 'avulso') return e;
+      return { ...e, tv: e.tvAntesAvulso ?? { tipo: 'espera' }, tvAntesAvulso: null };
     }
 
     case 'apagar': {
