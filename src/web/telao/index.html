@@ -27,7 +27,7 @@
     text-shadow: 0 .3vw 1.2vw rgba(0,0,0,.55);
   }
   #espera-padrao .h { font-size: 6.5vw; font-weight: 800; letter-spacing: -.01em; }
-  #espera-img { object-fit: cover; }
+  #espera-img, #espera-video { object-fit: cover; width: 100%; height: 100%; }
   #espera-logo { position: static; inset: auto; height: auto; background: transparent; width: 22vw; max-height: 34vh; object-fit: contain; justify-self: center; filter: drop-shadow(0 .4vw 1.4vw rgba(0,0,0,.5)); }
   #espera-padrao .s { font-size: 2vw; color: rgba(255,255,255,.7); }
   @media (prefers-reduced-motion: reduce) { .camada { transition: none; } }
@@ -37,6 +37,7 @@
   <div class="camada" id="c-espera">
     <div id="espera-padrao"><img id="espera-logo" alt="" hidden><div class="h">Seja bem-vindo</div></div>
     <img id="espera-img" alt="" hidden>
+    <video id="espera-video" muted loop playsinline hidden></video>
   </div>
   <div class="camada" id="c-imagem"><img id="img-fundo" alt="" hidden><img id="img" alt=""></div>
   <div class="camada" id="c-janela"><video id="janela" muted playsinline></video></div>

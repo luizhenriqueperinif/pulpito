@@ -17,16 +17,27 @@ const refValida = r => r && Number.isInteger(r.l) && Number.isInteger(r.c) && Nu
  *   item(reuniaoId, itemId): object|undefined,
  *   musica(bibliotecaId): object|undefined,   música da Biblioteca (para tocar avulsa)
  *   reuniaoExiste(id): boolean,
+ *   musicaEspera(reuniaoId): string|null,  música que toca na tela de espera ao abrir a reunião
  *   versao(e): string,                       versão da Bíblia do que está na TV
  *   existe(versao, ref): boolean,
  *   vizinho(versao, ref, delta): object|null
  * }} ctx
  */
 function aplicar(e, cmd, ctx) {
+  const novo = aplicarComando(e, cmd, ctx);
+  // A música da espera só vale enquanto a TV está na espera: saiu, ela sai junto (o Telão vai abaixando).
+  if (novo !== e && novo.audio && novo.audio.espera && novo.tv.tipo !== 'espera') return { ...novo, audio: null };
+  return novo;
+}
+
+function aplicarComando(e, cmd, ctx) {
   switch (cmd.cmd) {
     case 'escolherReuniao': {
       if (!ctx.reuniaoExiste(cmd.id)) return e;
-      return { ...estadoInicial(e.volume), reuniaoId: cmd.id };
+      const base = { ...estadoInicial(e.volume), reuniaoId: cmd.id };
+      // Abriu a reunião: a TV fica na espera e, se tiver música da espera, ela começa (em repetição).
+      const bid = ctx.musicaEspera ? ctx.musicaEspera(cmd.id) : null;
+      return bid && ctx.musica(bid) ? { ...base, audio: { ...novoAudio(e, bid, null), espera: true } } : base;
     }
 
     case 'mostrar': {

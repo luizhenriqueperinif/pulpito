@@ -297,3 +297,30 @@ test('barrinha: adianta e volta a música e o vídeo sem recomeçar', () => {
   assert.equal(v.video.t, 30);
   assert.equal(v.video.salto, 1);
 });
+
+test('música da espera: toca ao abrir a reunião, em repetição, e sai quando algo vai para a TV', () => {
+  const c = { ...ctx, musicaEspera: rid => (rid === 'r1' ? 'b-oracao' : null) };
+  const go = (...cmds) => cmds.reduce((e, x) => aplicar(e, x, c), estadoInicial());
+  const e1 = go({ cmd: 'escolherReuniao', id: 'r1' });
+  assert.equal(e1.tv.tipo, 'espera');
+  assert.equal(e1.audio.bibliotecaId, 'b-oracao');
+  assert.equal(e1.audio.espera, true);
+  // volume e pausa continuam valendo
+  assert.equal(aplicar(e1, { cmd: 'audioPausar' }, c).audio.tocando, false);
+  // algo vai para a TV: a música da espera sai
+  assert.equal(aplicar(e1, { cmd: 'mostrar', itemId: 'img' }, c).audio, null);
+  assert.equal(aplicar(e1, { cmd: 'apagar' }, c).audio, null);
+  // uma música escolhida no lugar dela não é mais "da espera" e não sai sozinha
+  const e2 = aplicar(e1, { cmd: 'tocarMusica', bibliotecaId: 'b-hino' }, c);
+  assert.equal(e2.audio.espera, undefined);
+  assert.equal(aplicar(e2, { cmd: 'mostrar', itemId: 'img' }, c).audio.bibliotecaId, 'b-hino');
+  // depois de sair, voltar para a espera não toca de novo
+  const e3 = go({ cmd: 'escolherReuniao', id: 'r1' }, { cmd: 'apagar' }, { cmd: 'apagar' });
+  assert.equal(e3.tv.tipo, 'espera');
+  assert.equal(e3.audio, null);
+});
+
+test('sem música da espera escolhida, abrir a reunião fica em silêncio', () => {
+  const c = { ...ctx, musicaEspera: () => null };
+  assert.equal(aplicar(estadoInicial(), { cmd: 'escolherReuniao', id: 'r1' }, c).audio, null);
+});

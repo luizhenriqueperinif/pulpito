@@ -102,6 +102,7 @@ function criarServidor({ dados, janelas = null }) {
 
   const ctx = {
     reuniaoExiste: id => !!dados.reuniao(id),
+    musicaEspera: rid => dados.musicaEspera(rid),
     item: (rid, iid) => dados.item(rid, iid),
     musica: bid => { const b = dados.arquivoDaBiblioteca(bid); return b && b.tipo === 'musica' ? b : undefined; },
     versao: versaoDe,
@@ -310,7 +311,7 @@ function criarServidor({ dados, janelas = null }) {
       nomesReunioes: [...new Set(dados.reunioes.map(r => r.nome).filter(Boolean))].slice(-12),
       biblioteca: dados.biblioteca.filter(b => b.tipo !== 'fundo').map(b => ({ id: b.id, tipo: b.tipo, titulo: b.titulo, arquivo: b.arquivo, capa: b.capa || undefined, criadoEm: b.criadoEm, qtd: b.arquivos ? b.arquivos.length : undefined })),
       recentes: dados.recentes(reuniao?.pastorId).map(r => ({ ...r, rotulo: biblia.rotulo(r) })),
-      info: { inicio: INICIO, url, qrSvg, tv: tvStatus, telas, celulares: celularesConectados(), telaEspera: dados.config.telaEspera, espera: dados.telaEspera(estado.reuniaoId), logo: dados.config.logo || null },
+      info: { inicio: INICIO, url, qrSvg, tv: tvStatus, telas, celulares: celularesConectados(), telaEspera: dados.config.telaEspera, musicaEspera: dados.config.musicaEspera || null, espera: dados.telaEspera(estado.reuniaoId), logo: dados.config.logo || null },
     };
     if (completo) {
       // Só o Painel precisa de tudo para preparar as reuniões.
@@ -318,6 +319,7 @@ function criarServidor({ dados, janelas = null }) {
       base.biblioteca = dados.biblioteca.map(b => ({ ...b, usos: dados.usos(b.id) }));
       base.antigos = dados.antigos().map(b => b.id);
       base.fundosEscondidos = dados.fundosEscondidos;
+      base.esperasEscondidas = dados.esperasEscondidas;
       base.reunioesCompletas = dados.reunioes.map(r => dados.reuniaoCompleta(r.id));
     }
     return JSON.stringify(base);
@@ -350,13 +352,17 @@ function criarServidor({ dados, janelas = null }) {
     moverItem: c => dados.moverItem(c.reuniaoId, c.itemId, Number(c.delta)),
     removerItem: c => dados.removerItem(c.reuniaoId, c.itemId),
     renomearArquivo: c => dados.renomearArquivo(c.id, c.titulo),
+    marcarParaEspera: c => dados.marcarParaEspera(c.id, !!c.sim),
     criarCategoria: c => dados.criarCategoria(c.nome),
     renomearCategoria: c => dados.renomearCategoria(c.id, c.nome),
     removerCategoria: c => dados.removerCategoria(c.id),
     definirCategoria: c => dados.definirCategoria(c.id, c.categoria),
     removerDaBiblioteca: c => dados.removerDaBiblioteca(c.id),
     esconderFundo: c => dados.esconderFundo(c.id),
+    musicaEsperaPadrao: c => dados.definirMusicaEsperaPadrao(c.id || null),
     mostrarFundosDoPrograma: () => dados.mostrarFundosDoPrograma(),
+    esconderEsperaDoPrograma: c => dados.esconderEsperaDoPrograma(c.id),
+    mostrarEsperasDoPrograma: () => dados.mostrarEsperasDoPrograma(),
     apagarAntigos: () => dados.apagarAntigos(),
   };
 

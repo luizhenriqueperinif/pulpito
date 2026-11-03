@@ -344,6 +344,14 @@ class Dados {
     this.salvar();
   }
 
+  /** Marca (ou desmarca) um vídeo ou imagem para aparecer na escolha da tela de espera. */
+  marcarParaEspera(bid, sim) {
+    const b = this.arquivoDaBiblioteca(bid);
+    if (!b || !['video', 'imagem', 'fundo'].includes(b.tipo)) return;
+    if (sim) b.espera = true; else delete b.espera;
+    this.salvar();
+  }
+
   renomearArquivo(bid, titulo) {
     const b = this.arquivoDaBiblioteca(bid);
     titulo = String(titulo || '').trim();
@@ -354,7 +362,7 @@ class Dados {
 
   /** Quantas reuniões usam este arquivo. */
   usos(bid) {
-    return this.d.reunioes.filter(r => r.fundo === bid || r.telaEspera === bid || r.itens.some(i => i.bibliotecaId === bid)).length;
+    return this.d.reunioes.filter(r => r.fundo === bid || r.telaEspera === bid || r.musicaEspera === bid || r.itens.some(i => i.bibliotecaId === bid)).length;
   }
 
   /** Apaga o arquivo e o tira das reuniões que o usam. */
@@ -366,7 +374,9 @@ class Dados {
       r.itens = r.itens.filter(i => i.bibliotecaId !== bid);
       if (r.fundo === bid) r.fundo = null;
       if (r.telaEspera === bid) r.telaEspera = null;
+      if (r.musicaEspera === bid) r.musicaEspera = null;
     }
+    if (this.d.config.musicaEspera === bid) this.d.config.musicaEspera = null;
     for (const a of [...(b.arquivos || [b.arquivo]), b.capa].filter(Boolean)) fs.rmSync(path.join(this.pastaMidia, a), { force: true });
     this.salvar();
   }
@@ -440,6 +450,7 @@ class Dados {
       if (!r.nome) r.nome = origem.nome;
       if (!r.fundo) r.fundo = origem.fundo || null;
       r.telaEspera = origem.telaEspera || null;
+      r.musicaEspera = origem.musicaEspera || null;
     }
     this.d.reunioes.push(r);
     this.salvar();
@@ -455,6 +466,7 @@ class Dados {
     if ('pastorId' in campos) r.pastorId = campos.pastorId || null;
     if ('fundo' in campos) r.fundo = campos.fundo || null;
     if ('telaEspera' in campos) r.telaEspera = campos.telaEspera || null;
+    if ('musicaEspera' in campos) r.musicaEspera = campos.musicaEspera || null;  // null = a padrão; 'nenhuma' = sem música
     this.salvar();
   }
 
@@ -587,6 +599,8 @@ class Dados {
       fundoId: this.fundoVale(r.fundo) ? r.fundo : this.fundoPadrao(),
       telaEsperaId: r.telaEspera || null,
       telaEspera: this.telaEspera(r.id),
+      musicaEsperaId: r.musicaEspera || null,
+      musicaEspera: this.musicaEspera(r.id),
       itens: r.itens.map(i => this._resolver(i)).filter(Boolean),
     };
   }
@@ -625,6 +639,22 @@ class Dados {
     return true;
   }
 
+  /** Fotos do programa tiradas da escolha da Tela de espera (dá para trazer de volta). */
+  get esperasEscondidas() { return this.d.config.esperasEscondidas || []; }
+
+  esconderEsperaDoPrograma(fid) {
+    if (!FOTOS_PRONTAS.has(fid) || this.esperasEscondidas.includes(fid)) return false;
+    this.d.config.esperasEscondidas = [...this.esperasEscondidas, fid];
+    for (const r of this.d.reunioes) if (r.telaEspera === fid) r.telaEspera = null;
+    this.salvar();
+    return true;
+  }
+
+  mostrarEsperasDoPrograma() {
+    this.d.config.esperasEscondidas = [];
+    this.salvar();
+  }
+
   mostrarFundosDoPrograma() {
     this.d.config.fundosEscondidos = [];
     this.salvar();
@@ -653,9 +683,29 @@ class Dados {
     if (escolhida) {
       const b = this.arquivoDaBiblioteca(escolhida);
       if (b && (b.tipo === 'imagem' || b.tipo === 'fundo')) return { arquivo: b.arquivo, daReuniao: true };
+      // Vídeo: passa sem som e em repetição (o som da chegada é a música da espera).
+      if (b && b.tipo === 'video') return { arquivo: b.arquivo, video: true, capa: b.capa || null, daReuniao: true };
       if (FUNDOS_PRONTOS.includes(escolhida) && FOTOS_PRONTAS.has(escolhida)) return { foto: '/comum/fundos/' + escolhida + '.jpg', daReuniao: true };
     }
-    return this.d.config.telaEspera ? { arquivo: this.d.config.telaEspera } : null;
+    const padrao = this.d.config.telaEspera;
+    if (!padrao) return null;
+    return EXT_VIDEO.includes(path.extname(padrao).slice(1).toLowerCase()) ? { arquivo: padrao, video: true } : { arquivo: padrao };
+  }
+
+  /** Música que toca na tela de espera ao abrir a reunião: a da reunião, senão a padrão; 'nenhuma' = sem música. */
+  musicaEspera(rid) {
+    const r = rid && this.reuniao(rid);
+    const ehMusica = bid => { const b = bid && this.arquivoDaBiblioteca(bid); return !!(b && b.tipo === 'musica'); };
+    if (r && r.musicaEspera === 'nenhuma') return null;
+    if (r && ehMusica(r.musicaEspera)) return r.musicaEspera;
+    return ehMusica(this.d.config.musicaEspera) ? this.d.config.musicaEspera : null;
+  }
+
+  definirMusicaEsperaPadrao(bid) {
+    const b = bid && this.arquivoDaBiblioteca(bid);
+    if (bid && !(b && b.tipo === 'musica')) return;
+    this.d.config.musicaEspera = bid || null;
+    this.salvar();
   }
 
   voltarTelaEsperaDoPrograma() {

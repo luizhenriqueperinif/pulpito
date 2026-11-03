@@ -441,3 +441,74 @@ test('tirar um fundo do programa: some da lista, a reunião que usava volta para
   d.mostrarFundosDoPrograma();
   assert.deepEqual(d.fundosEscondidos, []);
 });
+
+test('música da espera: padrão, da reunião, sem música, e some se apagar a música', () => {
+  const fs = require('fs'), os = require('os'), path = require('path');
+  const { Dados } = require('../src/main/dados');
+  const d = new Dados(fs.mkdtempSync(path.join(os.tmpdir(), 'pulpito-me-')));
+  const m1 = { id: 'm1', tipo: 'musica', titulo: 'Hino', arquivo: 'm1.mp3' };
+  const m2 = { id: 'm2', tipo: 'musica', titulo: 'Oração', arquivo: 'm2.mp3' };
+  d.d.biblioteca.push(m1, m2, { id: 'i1', tipo: 'imagem', titulo: 'x', arquivo: 'i1.png' });
+  const r = d.criarReuniao({ data: '2026-11-03', hora: '18:00' });
+  assert.equal(d.musicaEspera(r.id), null);
+  d.definirMusicaEsperaPadrao('m1');
+  assert.equal(d.musicaEspera(r.id), 'm1');
+  d.definirMusicaEsperaPadrao('i1'); // não é música: ignora
+  assert.equal(d.musicaEspera(r.id), 'm1');
+  d.editarReuniao(r.id, { musicaEspera: 'm2' });
+  assert.equal(d.musicaEspera(r.id), 'm2');
+  d.editarReuniao(r.id, { musicaEspera: 'nenhuma' });
+  assert.equal(d.musicaEspera(r.id), null);
+  d.editarReuniao(r.id, { musicaEspera: 'm2' });
+  assert.equal(d.usos('m2'), 1);
+  d.removerDaBiblioteca('m2');
+  assert.equal(d.musicaEspera(r.id), 'm1'); // volta para a padrão
+  d.removerDaBiblioteca('m1');
+  assert.equal(d.musicaEspera(r.id), null);
+  assert.equal(d.config.musicaEspera, null);
+});
+
+test('tela de espera com vídeo: da Biblioteca ou o arquivo padrão', () => {
+  const fs = require('fs'), os = require('os'), path = require('path');
+  const { Dados } = require('../src/main/dados');
+  const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'pulpito-ev-'));
+  const d = new Dados(pasta);
+  d.d.biblioteca.push({ id: 'v1', tipo: 'video', titulo: 'Fundo animado', arquivo: 'v1.mp4', capa: 'capa-v1.jpg' });
+  const r = d.criarReuniao({ data: '2026-11-03', hora: '18:00' });
+  d.editarReuniao(r.id, { telaEspera: 'v1' });
+  assert.deepEqual(d.telaEspera(r.id), { arquivo: 'v1.mp4', video: true, capa: 'capa-v1.jpg', daReuniao: true });
+  const origem = path.join(pasta, 'espera.mp4'); fs.writeFileSync(origem, 'x');
+  d.trocarTelaEspera(origem);
+  d.editarReuniao(r.id, { telaEspera: null });
+  assert.equal(d.telaEspera(r.id).video, true);
+});
+
+test('marcar vídeo ou imagem para aparecer na escolha da tela de espera', () => {
+  const fs = require('fs'), os = require('os'), path = require('path');
+  const { Dados } = require('../src/main/dados');
+  const d = new Dados(fs.mkdtempSync(path.join(os.tmpdir(), 'pulpito-me2-')));
+  d.d.biblioteca.push({ id: 'v1', tipo: 'video', titulo: 'a', arquivo: 'v1.mp4' }, { id: 'm1', tipo: 'musica', titulo: 'b', arquivo: 'm1.mp3' });
+  d.marcarParaEspera('v1', true);
+  assert.equal(d.arquivoDaBiblioteca('v1').espera, true);
+  d.marcarParaEspera('m1', true); // música não vai para a tela de espera
+  assert.equal(d.arquivoDaBiblioteca('m1').espera, undefined);
+  d.marcarParaEspera('v1', false);
+  assert.equal(d.arquivoDaBiblioteca('v1').espera, undefined);
+});
+
+test('tirar uma foto do programa da tela de espera: some da lista, a reunião volta para a padrão, e dá para trazer de volta', () => {
+  const fs = require('fs'), os = require('os'), path = require('path');
+  const { Dados, FUNDOS_PRONTOS } = require('../src/main/dados');
+  const d = new Dados(fs.mkdtempSync(path.join(os.tmpdir(), 'pulpito-ee-')));
+  const foto = FUNDOS_PRONTOS[8];
+  const r = d.criarReuniao({ data: '2026-11-03', hora: '18:00' });
+  d.editarReuniao(r.id, { telaEspera: foto });
+  assert.equal(d.telaEspera(r.id).daReuniao, true);
+  d.esconderEsperaDoPrograma(foto);
+  assert.deepEqual(d.esperasEscondidas, [foto]);
+  assert.equal(d.telaEspera(r.id), null);
+  d.esconderEsperaDoPrograma(FUNDOS_PRONTOS[0]); // cor, não é foto: ignora
+  assert.deepEqual(d.esperasEscondidas, [foto]);
+  d.mostrarEsperasDoPrograma();
+  assert.deepEqual(d.esperasEscondidas, []);
+});

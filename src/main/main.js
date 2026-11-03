@@ -3,14 +3,16 @@ const { app, BrowserWindow, screen, dialog, ipcMain, powerSaveBlocker, nativeIma
 const fs = require('fs');
 const path = require('path');
 const { execFile, execFileSync } = require('child_process');
-const { Dados, EXT_IMAGEM, EXT_VIDEO, EXT_AUDIO } = require('./dados');
+const { Dados, EXT_IMAGEM, EXT_VIDEO, EXT_AUDIO, tipoDoArquivo } = require('./dados');
 const { criarServidor } = require('./servidor');
 const { criarTeclas } = require('./teclas');
 
 // Os dados ficam sempre na mesma pasta, rodando pelo código (npm start) ou instalado (.exe).
 app.setPath('userData', path.join(app.getPath('appData'), 'auxilio-reuniao'));
 
-if (!app.requestSingleInstanceLock()) { app.quit(); }
+// Abriu de novo com o Púlpito já aberto: esta cópia só traz a janela que já está aberta para a frente e fecha.
+const primeiraCopia = app.requestSingleInstanceLock();
+if (!primeiraCopia) app.quit();
 
 // Um erro inesperado nunca pode abrir janela de erro no meio da reunião:
 // fica anotado em "erros.log" (na pasta de dados) e o programa continua.
@@ -137,7 +139,15 @@ function telasMudaram() {
 }
 
 /** Copia os arquivos para a Biblioteca e, se veio uma reunião, coloca no fim dela. */
+// comoFundo: true = fundo de versículo; 'espera' = vídeos e imagens para a Tela de espera.
 function importar(caminhos, reuniaoId, comoFundo) {
+  if (comoFundo === 'espera') {
+    const servem = caminhos.filter(c => ['video', 'imagem'].includes(tipoDoArquivo(c)));
+    const r = dados.importarArquivos(servem, {});
+    for (const b of [...r.novos, ...r.repetidos]) dados.marcarParaEspera(b.id, true);
+    servidor.transmitir();
+    return { qtd: r.novos.length, repetidos: r.repetidos.length, ignorados: r.ignorados + caminhos.length - servem.length, naReuniao: false };
+  }
   const { novos, repetidos, ignorados } = dados.importarArquivos(caminhos, { comoFundo: !!comoFundo });
   // Os repetidos não são copiados de novo, mas entram na reunião (se ela ainda não tiver).
   if (reuniaoId && !comoFundo) dados.adicionarItens(reuniaoId, [...novos, ...repetidos].map(b => b.id), { semRepetir: true });
@@ -146,7 +156,9 @@ function importar(caminhos, reuniaoId, comoFundo) {
 }
 
 ipcMain.handle('importar-dialogo', async (_e, { reuniaoId, comoFundo } = {}) => {
-  const r = await dialog.showOpenDialog(painel, comoFundo
+  const r = await dialog.showOpenDialog(painel, comoFundo === 'espera'
+    ? { title: 'Escolha os vídeos e imagens da Tela de espera', properties: ['openFile', 'multiSelections'], filters: [{ name: 'Vídeos e imagens', extensions: [...EXT_VIDEO, ...EXT_IMAGEM] }] }
+    : comoFundo
     ? { title: 'Escolha as imagens de fundo', properties: ['openFile', 'multiSelections'], filters: [{ name: 'Imagens', extensions: EXT_IMAGEM }] }
     : { title: 'Escolha as fotos, vídeos e músicas', properties: ['openFile', 'multiSelections'], filters: [{ name: 'Fotos, vídeos e músicas', extensions: [...EXT_IMAGEM, ...EXT_VIDEO, ...EXT_AUDIO] }] });
   if (r.canceled || r.filePaths.length === 0) return null;
@@ -224,9 +236,9 @@ ipcMain.handle('tirar-logo', () => {
 
 ipcMain.handle('trocar-tela-espera', async () => {
   const r = await dialog.showOpenDialog(painel, {
-    title: 'Escolha a imagem da Tela de espera',
+    title: 'Escolha a imagem ou o vídeo da Tela de espera',
     properties: ['openFile'],
-    filters: [{ name: 'Imagens', extensions: EXT_IMAGEM }],
+    filters: [{ name: 'Imagens e vídeos', extensions: [...EXT_IMAGEM, ...EXT_VIDEO] }],
   });
   if (r.canceled || !r.filePaths[0]) return false;
   dados.trocarTelaEspera(r.filePaths[0]);
@@ -381,6 +393,7 @@ async function tirarCapas() {
 app.on('second-instance', () => { if (painel) { if (painel.isMinimized()) painel.restore(); painel.focus(); } });
 
 app.whenReady().then(async () => {
+  if (!primeiraCopia) return;
   dados = new Dados(path.join(app.getPath('userData'), 'dados'));
   servidor = criarServidor({ dados, janelas: { listar: () => listarJanelas(true), apertar: teclas.apertar } });
   try {

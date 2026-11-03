@@ -346,3 +346,36 @@ main > #aba-reserva { max-width: none; }
 .reserva-cab { display: flex; align-items: baseline; gap: 18px; flex-wrap: wrap; }
 .reserva-cab .note { margin: 0; }
 .reserva iframe { width: 100%; height: 100%; min-height: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); }
+
+/* Música da espera */
+.musicas-op { display: grid; gap: 8px; }
+.musica-op { display: flex; align-items: center; gap: 14px; min-height: 60px; padding: 10px 16px; text-align: left; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); font: inherit; cursor: pointer; }
+.musica-op:hover { border-color: var(--line-2); }
+.musica-op .i { width: 22px; height: 22px; color: var(--muted); }
+.musica-op span { display: grid; gap: 2px; min-width: 0; }
+.musica-op b { font-size: 17px; overflow-wrap: anywhere; }
+.musica-op small { font-size: 14px; color: var(--muted); }
+.musica-op.sel { border: 2px solid var(--navy); background: var(--surface-2); padding: 9px 15px; }
+.musica-op.sel .i { color: var(--navy); }
+
+/* Tela de espera com vídeo */
+.espera-amostra { position: relative; overflow: hidden; }
+.espera-amostra video, .espera-mini video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.espera-mini { position: relative; }
+.espera-amostra > .i { position: relative; width: 34px; height: 34px; color: #fff; filter: drop-shadow(0 1px 3px rgba(0,0,0,.6)); }
+.ver-mais { justify-self: start; }
+.arq .acoes .btn.na-espera { border-color: var(--navy); background: var(--surface-2); color: var(--navy); }
+.qt-dia { font-family: var(--font-ui); font-size: 13px; background: var(--surface-2); color: var(--muted); border-radius: 99px; padding: 1px 9px; vertical-align: middle; }
+
+/* Com 6 abas: nome curto e o ícone em cima antes de cortar o nome */
+@container (max-width: 1100px) {
+  .tipos .longo { display: none; }
+  .tipos .curto { display: inline; }
+}
+@container (max-width: 1000px) {
+  .tipos .btn { flex-direction: column; gap: 4px; min-height: 80px; font-size: 16px; }
+  .tipos .nm { white-space: nowrap; }
+}
+@container (max-width: 1000px) {
+  .tipos .nm { white-space: normal; text-align: center; line-height: 1.15; }
+}

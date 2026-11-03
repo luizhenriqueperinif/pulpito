@@ -67,16 +67,29 @@
     const logo = $('espera-logo');
     if (info.logo) { const s = '/logo.png?v=' + encodeURIComponent(info.logo); if (logo.dataset.src !== s) { logo.src = s; logo.dataset.src = s; } logo.hidden = false; }
     else logo.hidden = true;
-    if (esp) {
-      const src = esp.arquivo ? conexao.midia(esp.arquivo) : esp.foto;
-      if (esperaImg.dataset.src !== src) { esperaImg.src = src; esperaImg.dataset.src = src; }
-      esperaImg.hidden = false; $('espera-padrao').hidden = true;
+    const esperaVideo = $('espera-video');
+    if (esp && esp.video) {
+      // Vídeo da espera: sem som, em repetição; só roda enquanto a TV está na espera.
+      const src = conexao.midia(esp.arquivo);
+      if (esperaVideo.dataset.src !== src) { esperaVideo.src = src; esperaVideo.dataset.src = src; }
+      esperaVideo.hidden = false; esperaImg.hidden = true; $('espera-padrao').hidden = true;
+      if (estado.tv.tipo === 'espera') { if (esperaVideo.paused) esperaVideo.play().catch(() => {}); }
+      else if (!esperaVideo.paused) esperaVideo.pause();
     } else {
-      esperaImg.hidden = true; $('espera-padrao').hidden = false;
+      if (!esperaVideo.paused) esperaVideo.pause();
+      if (esperaVideo.dataset.src) { esperaVideo.removeAttribute('src'); esperaVideo.dataset.src = ''; esperaVideo.load(); }
+      esperaVideo.hidden = true;
+      if (esp) {
+        const src = esp.arquivo ? conexao.midia(esp.arquivo) : esp.foto;
+        if (esperaImg.dataset.src !== src) { esperaImg.src = src; esperaImg.dataset.src = src; }
+        esperaImg.hidden = false; $('espera-padrao').hidden = true;
+      } else {
+        esperaImg.hidden = true; $('espera-padrao').hidden = false;
+      }
     }
 
     video.volume = Math.max(0, Math.min(1, estado.volume / 10));
-    audio.volume = video.volume;
+    if (!abaixando) audio.volume = video.volume;
     aplicarAudio(estado.audio, msg.musica);
 
     if (estado.tv.tipo === 'janela') { pararVideo(); mostrarJanela(estado.tv.fonteId); return; }
@@ -139,15 +152,32 @@
     }
   }
 
+  // A música da espera sai abaixando devagar (uns 3 segundos), sem cortar de uma vez.
+  let abaixando = null;
+  function pararAbaixando() { if (abaixando) { clearInterval(abaixando); abaixando = null; } }
+  function abaixarEParar() {
+    if (abaixando || audio.paused) return;
+    const de = audio.volume, passos = 30;
+    let n = 0;
+    abaixando = setInterval(() => {
+      n++;
+      audio.volume = Math.max(0, de * (1 - n / passos));
+      if (n >= passos) { pararAbaixando(); audio.pause(); audio.volume = video.volume; }
+    }, 100);
+  }
+
   function aplicarAudio(a, musica) {
     if (!a || !musica) {
-      if (!audio.paused) audio.pause();
+      if (atualAudio.espera) abaixarEParar();
+      else if (!audio.paused) audio.pause();
       atualAudio = { arquivo: null, inicio: null, salto: 0 };
       return;
     }
+    if (abaixando) { pararAbaixando(); audio.volume = video.volume; }
+    audio.loop = !!a.espera;
     const src = conexao.midia(musica.arquivo);
     if (atualAudio.arquivo !== src || atualAudio.inicio !== a.inicio) {
-      atualAudio = { arquivo: src, inicio: a.inicio, salto: a.salto || 0 };
+      atualAudio = { arquivo: src, inicio: a.inicio, salto: a.salto || 0, espera: !!a.espera };
       if (audio.dataset.src !== src) { audio.src = src; audio.dataset.src = src; }
       try { audio.currentTime = 0; } catch (e) {}
     }

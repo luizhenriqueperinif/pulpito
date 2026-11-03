@@ -124,7 +124,7 @@
     else if (S.aba === 'biblioteca') html = biblioteca();
     else if (S.aba === 'config') html = configuracoes();
     $('conteudo').innerHTML = html;
-    $('modal').innerHTML = S.espera ? janelaEspera() : S.janelas ? escolherJanela() : S.escolher ? janelaEscolher() : S.testar != null ? janelaTestar() : S.verso ? janelaVerso() : S.fundo ? janelaFundo() : '';
+    $('modal').innerHTML = S.musicaEspera ? janelaMusicaEspera() : S.espera ? janelaEspera() : S.janelas ? escolherJanela() : S.escolher ? janelaEscolher() : S.testar != null ? janelaTestar() : S.verso ? janelaVerso() : S.fundo ? janelaFundo() : '';
     window.Versiculo.ajustar(document.body);
     const v = document.querySelector('#modal video'); if (v) v.volume = 0.5;
   }
@@ -255,6 +255,7 @@
           <button class="btn" data-a="editarDados">${I('editar')} Mudar dia, hora ou pastor</button>
           <button class="btn" data-a="abrirFundo"><span class="bolinha" style='background:${fundoCss(r.fundo)}'></span> Fundo dos versículos</button>
           <button class="btn" data-a="abrirEspera"><span class="bolinha" style='background:${esperaCss(r.telaEspera)}'></span> Tela de espera${r.telaEsperaId ? '' : ' (padrão)'}</button>
+          <button class="btn" data-a="abrirMusicaEspera" data-v="reuniao">${I('musica')} Música da espera: ${esc(nomeMusicaEspera(r))}</button>
           <button class="btn" data-a="testar" ${r.itens.length ? '' : 'disabled'}>${I('play')} Testar</button>
           <button class="btn primary" data-a="passarAqui" data-v="${r.id}" title="Começa a reunião e abre o controle aqui no notebook">${I('tv')} ${M.estado.reuniaoId === r.id ? 'Passar na TV por aqui' : M.estado.reuniaoId ? 'Trocar a TV para esta reunião' : 'Passar na TV por aqui'}</button>
         </div></div>`}
@@ -312,15 +313,15 @@
       <div class="acoes">
         ${S.renomear === b.id
           ? `<button class="btn primary" data-a="salvarNome" data-v="${b.id}">Salvar</button><button class="btn" data-a="cancelarNome">Cancelar</button>`
-          : `<button class="btn" data-a="renomear" data-v="${b.id}">${I('editar')} Nome</button><button class="btn danger" data-a="apagarArquivo" data-v="${b.id}">${I('lixo')} Apagar</button>`}
+          : `${b.tipo === 'video' || b.tipo === 'imagem' ? `<button class="btn ${b.espera ? 'na-espera' : ''}" data-a="marcarEspera" data-v="${b.id}" title="Aparece na escolha da Tela de espera das reuniões">${I(b.espera ? 'ok' : 'tv')} ${b.espera ? 'Na espera' : 'Usar na espera'}</button>` : ''}<button class="btn" data-a="renomear" data-v="${b.id}">${I('editar')} Nome</button><button class="btn danger" data-a="apagarArquivo" data-v="${b.id}">${I('lixo')} Apagar</button>`}
       </div></div>`;
   }
 
   // Abas dos tipos de arquivo: uma linha só, todas do mesmo tamanho; com pouco espaço o ícone vai para cima.
   function subAbas(atual, acao) {
-    const qtd = t => M.biblioteca.filter(b => b.tipo === t).length + (t === 'fundo' && acao === 'bibAba' ? fundosDoPrograma().length : 0);
+    const qtd = t => t === 'espera' ? M.biblioteca.filter(b => b.espera).length + fotosDaEspera().length : M.biblioteca.filter(b => b.tipo === t).length + (t === 'fundo' && acao === 'bibAba' ? fundosDoPrograma().length : 0);
     const tipos = [['video', I('video'), 'Vídeos'], ['imagem', I('imagem'), 'Imagens'], ['pregacao', I('pregacao'), 'Pregações'], ['musica', I('musica'), 'Músicas']];
-    if (acao === 'bibAba') tipos.push(['fundo', I('fundo'), 'Fundos de versículo', 'Fundos']);
+    if (acao === 'bibAba') tipos.push(['fundo', I('fundo'), 'Fundos de versículo'], ['espera', I('tv'), 'Tela de espera']);
     const nome = (longo, curto) => curto ? `<span class="longo">${longo}</span><span class="curto">${curto}</span>` : longo;
     return `<div class="tipos-caixa"><div class="tipos">${tipos.map(([t, ic, longo, curto]) => `
       <button class="btn ${atual === t ? 'sel' : ''}" data-a="${acao}" data-v="${t}" title="${longo}">
@@ -401,16 +402,43 @@
         <div class="acoes">
           ${S.bibAba === 'pregacao'
             ? `<button class="btn primary" data-a="novaPregacao">${I('mais')} Nova pregação</button>`
-            : `<button class="btn primary" data-a="importar">${S.bibAba === 'fundo' ? '+ Adicionar imagem de fundo' : S.bibAba === 'musica' ? '+ Adicionar músicas' : '+ Adicionar arquivos'}</button>`}
+            : `<button class="btn primary" data-a="importar">${S.bibAba === 'espera' ? '+ Adicionar vídeo ou imagem' : S.bibAba === 'fundo' ? '+ Adicionar imagem de fundo' : S.bibAba === 'musica' ? '+ Adicionar músicas' : '+ Adicionar arquivos'}</button>`}
           <button class="btn danger" data-a="apagarAntigos" ${antigos ? '' : 'disabled'}>${I('lixo')} Apagar antigos (${antigos})</button>
         </div></div>
       <p class="note">"Apagar antigos" apaga fotos, vídeos e pregações que não foram usados nos últimos 7 dias e não estão em nenhuma reunião de hoje em diante. Músicas e fundos nunca são apagados por ele.</p>
       ${subAbas(S.bibAba, 'bibAba')}
       ${S.bibAba === 'musica' ? barraCategorias() : ''}
-      ${trocaVisao(S.bibAba)}
-      ${S.bibAba === 'fundo' ? abaFundos(lista) : lista.length ? porDia(lista, undefined, S.bibAba)
+      ${S.bibAba === 'espera' ? '' : trocaVisao(S.bibAba)}
+      ${S.bibAba === 'espera' ? abaEspera() : S.bibAba === 'fundo' ? abaFundos(lista) : lista.length ? porDia(lista, undefined, S.bibAba)
         : `<div class="vazio"><div class="grande">${I(S.bibAba === 'fundo' ? 'fundo' : 'biblioteca')}</div><div>${S.bibAba === 'video' ? 'Nenhum vídeo ainda.' : S.bibAba === 'musica' ? 'Nenhuma música ainda. Hinos, louvores e fundos de oração ficam guardados aqui para sempre.' : S.bibAba === 'pregacao' ? 'Nenhuma pregação ainda. Use "+ Nova pregação" e escolha todas as imagens que o bispo mandou.' : S.bibAba === 'fundo' ? 'Nenhum fundo próprio ainda. Os fundos que vêm no programa aparecem na hora de escolher o fundo da reunião.' : 'Nenhuma imagem ainda.'}</div></div>`}
     </div>`;
+  }
+
+  // Aba "Tela de espera": o que aparece na hora de escolher a tela de espera de cada reunião.
+  const fotosDaEspera = () => window.Versiculo.FUNDOS.filter(f => f.foto && !(M.esperasEscondidas || []).includes(f.id));
+  function abaEspera() {
+    const marcados = M.biblioteca.filter(b => b.espera).slice().reverse();
+    const cartao = b => `<div class="arq">${miniatura(b)}
+      <div class="info"><div class="t">${esc(b.titulo)}</div><div class="d">Adicionado em ${ddmm(b.criadoEm)}</div></div>
+      <div class="acoes"><button class="btn" data-a="marcarEspera" data-v="${b.id}">${I('fechar')} Tirar da espera</button></div></div>`;
+    const grupo = (tipo, titulo, vazio) => {
+      const l = marcados.filter(b => (tipo === 'video' ? b.tipo === 'video' : b.tipo !== 'video'));
+      return `<h2 class="sub-titulo">${titulo} <span class="qt-dia">${l.length}</span></h2>
+        ${l.length ? `<div class="grade">${l.map(cartao).join('')}</div>` : `<p class="note">${vazio}</p>`}`;
+    };
+    const fotos = fotosDaEspera(), escondidas = (M.esperasEscondidas || []).length;
+    const fotosHtml = fotos.map(f => `<div class="fundo-op fixo">${amostraEspera({ foto: f.foto })}
+        <span class="nome-linha"><span class="nome">${esc(f.nome)}</span>
+          <button class="btn sm danger" data-a="esconderEspera" data-v="${f.id}" title="Tirar esta foto da Tela de espera">${I('lixo')} Tirar</button></span></div>`).join('');
+    const voltar = escondidas ? `<p class="note">Vocês tiraram ${escondidas} ${escondidas === 1 ? 'foto' : 'fotos'} do programa. <button class="btn sm" data-a="mostrarEsperas">${I('voltar')} Trazer de volta</button></p>` : '';
+    return `<p class="note">Estes vídeos e imagens aparecem na hora de escolher a Tela de espera de uma reunião (botão "Tela de espera" dentro da reunião).
+        Os vídeos passam sem som e repetindo. Use "+ Adicionar vídeo ou imagem", arraste os arquivos para cá ou clique em "Usar na espera" nas abas Vídeos e Imagens.</p>
+      ${grupo('video', 'Vídeos', 'Nenhum vídeo para a espera ainda.')}
+      ${grupo('imagem', 'Suas imagens', 'Nenhuma imagem sua para a espera ainda.')}
+      <h2 class="sub-titulo">Fotos que vêm no programa <span class="qt-dia">${fotos.length}</span></h2>
+      <p class="note">"Tirar" só tira da lista: dá para trazer de volta.</p>
+      ${fotos.length ? `<div class="fundos">${fotosHtml}</div>` : ''}${voltar}
+      <p class="note">"Tirar da espera" não apaga o arquivo: ele continua na Biblioteca.</p>`;
   }
 
   function janelaEscolher() {
@@ -596,31 +624,83 @@
   // ---------- Tela de espera da reunião ----------
   // Como a tela de espera aparece (para as miniaturas). null = a do programa: foto + "Seja bem-vindo".
   function esperaCss(esp) {
+    if (esp && esp.video) return esp.capa ? `url("${midia(esp.capa)}") center / cover no-repeat` : '#111';
     if (esp && esp.arquivo) return `url("${midia(esp.arquivo)}") center / cover no-repeat`;
     if (esp && esp.foto) return `url("${esp.foto}") center / cover no-repeat`;
     return 'linear-gradient(rgba(0,0,0,.5), rgba(0,0,0,.6)), url("/comum/fundos/amanhecer-dourado.jpg") center / cover no-repeat';
   }
   function amostraEspera(esp) {
-    return `<span class="amostra espera-amostra" style='background:${esperaCss(esp)}'>${esp ? '' : '<b>Seja bem-vindo</b>'}</span>`;
+    if (esp && esp.video && !esp.capa) return `<span class="amostra espera-amostra"><video src="${midia(esp.arquivo)}#t=1" muted preload="metadata"></video>${I('video')}</span>`;
+    return `<span class="amostra espera-amostra" style='background:${esperaCss(esp)}'>${esp ? (esp.video ? I('video') : '') : '<b>Seja bem-vindo</b>'}</span>`;
   }
+  const EXT_VID = /.(mp4|m4v|mov|webm|mkv)$/i;
+  const esperaPadrao = () => M.info.telaEspera ? { arquivo: M.info.telaEspera, video: EXT_VID.test(M.info.telaEspera) } : null;
   function janelaEspera() {
     const r = reuniaoAberta();
     if (!r) { S.espera = false; return ''; }
-    const padrao = M.info.telaEspera ? { arquivo: M.info.telaEspera } : null;
-    const fotos = window.Versiculo.FUNDOS.filter(f => f.foto).map(f => ({ id: f.id, nome: f.nome, esp: { foto: f.foto } }));
-    const proprias = M.biblioteca.filter(b => b.tipo === 'imagem' || b.tipo === 'fundo').slice().reverse().map(b => ({ id: b.id, nome: b.titulo, esp: { arquivo: b.arquivo } }));
+    const padrao = esperaPadrao();
+    const sel0 = r.telaEsperaId || '';
+    // Só o que o pastor marcou na Biblioteca (e o que já está escolhido, mesmo se desmarcou depois).
+    const vale = b => b.espera || b.id === sel0;
+    const fotos = window.Versiculo.FUNDOS.filter(f => f.foto && (!(M.esperasEscondidas || []).includes(f.id) || f.id === sel0)).map(f => ({ id: f.id, nome: f.nome, esp: { foto: f.foto } }));
+    const proprias = M.biblioteca.filter(b => (b.tipo === 'imagem' || b.tipo === 'fundo') && vale(b)).slice().reverse().map(b => ({ id: b.id, nome: b.titulo, esp: { arquivo: b.arquivo } }));
+    const videos = M.biblioteca.filter(b => b.tipo === 'video' && vale(b)).slice().reverse().map(b => ({ id: b.id, nome: b.titulo, esp: { arquivo: b.arquivo, video: true, capa: b.capa } }));
     const sel = r.telaEsperaId || '';
     const tile = (id, nome, esp) => `<button class="fundo-op ${sel === id ? 'sel' : ''}" data-a="escolherEspera" data-v="${id}">
         ${amostraEspera(esp)}<span class="nome">${sel === id ? I('ok') + ' ' : ''}${esc(nome)}</span></button>`;
+    // Mostra 4 de cada; a setinha abre o resto (abre sozinho se o escolhido estiver escondido).
+    const VISIVEIS = 4;
+    const grupo = (k, titulo, lista, nota, vazio) => {
+      const aberto = (S.esperaMais || {})[k] || lista.slice(VISIVEIS).some(x => x.id === sel);
+      const mostra = aberto ? lista : lista.slice(0, VISIVEIS);
+      const resto = lista.length - VISIVEIS;
+      return `<h3 class="sub-titulo">${titulo}</h3>
+        ${lista.length ? (nota ? `<p class="note">${nota}</p>` : '') + `<div class="fundos">${mostra.map(x => tile(x.id, x.nome, x.esp)).join('')}</div>` : `<p class="note">${vazio}</p>`}
+        ${resto > 0 ? `<button class="btn sm ver-mais" data-a="esperaMais" data-v="${k}">${I(aberto ? 'subir' : 'descer')} ${aberto ? 'Mostrar menos' : `Ver mais ${resto}`}</button>` : ''}`;
+    };
     return `<div class="fundo-modal"><div class="janela" role="dialog" aria-label="Tela de espera desta reunião">
       <header><h2>Tela de espera desta reunião</h2><button class="btn sm" data-a="fecharModal">${I('fechar')} Fechar</button></header>
       <div class="corpo"><p class="note">É o que aparece na TV antes de começar e quando nada está passando. Se não escolher, fica a padrão.</p>
         <div class="fundos">${tile('', 'Padrão', padrao)}</div>
-        <h3 class="sub-titulo">Fotos do programa</h3>
-        <div class="fundos">${fotos.map(f => tile(f.id, f.nome, f.esp)).join('')}</div>
-        ${proprias.length ? `<h3 class="sub-titulo">Imagens da Biblioteca</h3><div class="fundos">${proprias.map(f => tile(f.id, f.nome, f.esp)).join('')}</div>` : ''}
+        ${grupo('video', 'Vídeos', videos, 'O vídeo passa sem som, repetindo, enquanto a TV está na espera. O som fica com a música da espera.',
+          'Nenhum vídeo marcado para a espera. Na Biblioteca, aba Vídeos, clique em "Usar na espera" nos vídeos que quiser.')}
+        ${grupo('imagem', 'Imagens', [...proprias, ...fotos], '', '')}
       </div>
       <footer><span class="note">A padrão muda em Configurações → Tela de espera.</span><button class="btn primary" data-a="fecharModal">Pronto</button></footer>
+    </div></div>`;
+  }
+
+  // ---------- Música da espera ----------
+  const tituloMusica = bid => { const b = bid && M.biblioteca.find(x => x.id === bid && x.tipo === 'musica'); return b ? b.titulo : null; };
+  function nomeMusicaEspera(r) {
+    if (r.musicaEsperaId === 'nenhuma') return 'sem música';
+    const da = tituloMusica(r.musicaEsperaId);
+    if (da) return da;
+    const p = tituloMusica(M.info.musicaEspera);
+    return p ? p + ' (padrão)' : 'sem música';
+  }
+  // Escolher a música que toca na tela de espera: da reunião aberta ou a padrão (Configurações).
+  function janelaMusicaEspera() {
+    const daReuniao = S.musicaEspera === 'reuniao';
+    const r = reuniaoAberta();
+    if (daReuniao && !r) { S.musicaEspera = null; return ''; }
+    const sel = daReuniao ? (r.musicaEsperaId || '') : (M.info.musicaEspera || 'nenhuma');
+    const musicas = M.biblioteca.filter(b => b.tipo === 'musica').slice().sort((a, b) => a.titulo.localeCompare(b.titulo, 'pt-BR'));
+    const op = (v, nome, sub) => `<button class="musica-op ${sel === v ? 'sel' : ''}" data-a="escolherMusicaEspera" data-v="${v}">
+        ${I(sel === v ? 'ok' : v === 'nenhuma' ? 'fechar' : 'musica')}<span><b>${esc(nome)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</span></button>`;
+    const padrao = tituloMusica(M.info.musicaEspera);
+    return `<div class="fundo-modal"><div class="janela" role="dialog" aria-label="Música da espera">
+      <header><h2>${daReuniao ? 'Música da espera desta reunião' : 'Música da espera padrão'}</h2><button class="btn sm" data-a="fecharModal">${I('fechar')} Fechar</button></header>
+      <div class="corpo"><p class="note">Toca em repetição na tela de espera quando a reunião é aberta, enquanto o povo chega.
+        Quando o pastor coloca alguma coisa na TV, ela vai abaixando e para.</p>
+        <div class="musicas-op">
+          ${daReuniao ? op('', 'Usar a padrão', padrao ? padrao : 'a padrão está sem música') : ''}
+          ${op('nenhuma', 'Sem música')}
+          ${musicas.map(m => op(m.id, m.titulo)).join('')}
+        </div>
+        ${musicas.length ? '' : '<p class="note">Nenhuma música na Biblioteca ainda. Coloque as músicas na Biblioteca, aba Músicas.</p>'}
+      </div>
+      <footer><span class="note">${daReuniao ? 'A padrão muda em Configurações.' : 'Cada reunião pode escolher outra, no botão "Música da espera" dentro da reunião.'}</span><button class="btn primary" data-a="fecharModal">Pronto</button></footer>
     </div></div>`;
   }
 
@@ -637,7 +717,10 @@
         <div><div class="t">${esc(p.nome)}</div><div class="note">Bíblia ${p.versao}</div></div>
         <div class="acoes"><button class="btn sm" data-a="editarPastor" data-v="${p.id}">${I('editar')} Editar</button>
           <button class="btn danger sm" data-a="removerPastor" data-v="${p.id}" aria-label="Remover pastor">${I('lixo')}</button></div></div>`).join('');
-    const espera = `<div class="espera-mini" style='background:${esperaCss(M.info.telaEspera ? { arquivo: M.info.telaEspera } : null)}'>${M.info.telaEspera ? '' : '<b>Seja bem-vindo</b>'}</div>`;
+    const ep = esperaPadrao();
+    const espera = ep && ep.video
+      ? `<div class="espera-mini"><video src="${midia(ep.arquivo)}" muted autoplay loop playsinline></video></div>`
+      : `<div class="espera-mini" style='background:${esperaCss(ep)}'>${ep ? '' : '<b>Seja bem-vindo</b>'}</div>`;
 
     return `<div class="pagina">
       <h1>Configurações</h1>
@@ -651,8 +734,13 @@
         <p class="note">O que aparece na TV antes e depois da reunião. Cada reunião pode escolher outra, no botão "Tela de espera" dentro da reunião.
           A do programa é uma foto com a logo da igreja e "Seja bem-vindo".</p>
         ${espera}
-        <div class="acoes"><button class="btn" data-a="trocarEspera">Usar uma imagem minha</button>
+        <div class="acoes"><button class="btn" data-a="trocarEspera">Usar uma imagem ou vídeo meu</button>
           ${M.info.telaEspera ? '<button class="btn" data-a="esperaDoPrograma">Voltar para a do programa</button>' : ''}</div>
+      </section>
+      <section class="caixa">
+        <h2>Música da espera padrão</h2>
+        <p class="note">Toca na tela de espera quando a reunião é aberta. Quando alguma coisa vai para a TV, ela vai abaixando e para.</p>
+        <div class="acoes"><button class="btn" data-a="abrirMusicaEspera" data-v="padrao">${I('musica')} ${esc(tituloMusica(M.info.musicaEspera) || 'Sem música')}</button></div>
       </section>
       <section class="caixa">
         <h2>Monitores</h2>
@@ -766,7 +854,7 @@
     moverPassagem: (v, el) => enviar({ cmd: 'moverPassagem', reuniaoId: S.aberta, passagemId: v, delta: Number(el.dataset.d) }),
     tirarPassagem: v => enviar({ cmd: 'removerPassagem', reuniaoId: S.aberta, passagemId: v }),
     importar: async () => {
-      const comoFundo = (S.aba === 'biblioteca' && S.bibAba === 'fundo') || S.fundo;
+      const comoFundo = S.aba === 'biblioteca' && S.bibAba === 'espera' ? 'espera' : (S.aba === 'biblioteca' && S.bibAba === 'fundo') || S.fundo;
       const r = await window.notebook.importarDialogo(S.aba === 'reunioes' && !comoFundo ? S.aberta : null, comoFundo);
       avisarImportacao(r);
     },
@@ -786,8 +874,21 @@
       avisar(`${S.escolher.sel.size} colocado(s) na reunião.`);
       S.escolher = null;
     },
-    fecharModal: () => { S.escolher = null; S.testar = null; S.verso = null; S.fundo = false; S.janelas = null; S.espera = false; },
-    abrirEspera: () => { S.espera = true; },
+    fecharModal: () => { S.escolher = null; S.testar = null; S.verso = null; S.fundo = false; S.janelas = null; S.espera = false; S.musicaEspera = null; },
+    abrirEspera: () => { S.espera = true; S.esperaMais = {}; },
+    esperaMais: v => { S.esperaMais[v] = !S.esperaMais[v]; },
+    marcarEspera: v => { const b = M.biblioteca.find(x => x.id === v); if (!b) return; b.espera = !b.espera; enviar({ cmd: 'marcarParaEspera', id: v, sim: b.espera }); },
+    abrirMusicaEspera: v => { S.musicaEspera = v; },
+    escolherMusicaEspera: v => {
+      if (S.musicaEspera === 'padrao') {
+        M.info.musicaEspera = v === 'nenhuma' ? null : v;  // já mostra marcado enquanto o notebook grava
+        enviar({ cmd: 'musicaEsperaPadrao', id: v === 'nenhuma' ? null : v });
+      } else {
+        const r = reuniaoAberta();
+        r.musicaEsperaId = v || null;
+        enviar({ cmd: 'editarReuniao', id: S.aberta, campos: { musicaEspera: v || null } });
+      }
+    },
     escolherEspera: v => {
       const r = reuniaoAberta();
       r.telaEsperaId = v || null;  // já mostra marcado enquanto o notebook grava
@@ -878,6 +979,8 @@
     },
     trocarEspera: () => window.notebook.trocarTelaEspera(),
     esconderFundo: v => enviar({ cmd: 'esconderFundo', id: v }),
+    esconderEspera: v => enviar({ cmd: 'esconderEsperaDoPrograma', id: v }),
+    mostrarEsperas: () => enviar({ cmd: 'mostrarEsperasDoPrograma' }),
     mostrarFundos: () => enviar({ cmd: 'mostrarFundosDoPrograma' }),
     trocarTelas: () => window.notebook.trocarTelas(),
     escolherLogo: async () => {
@@ -1055,7 +1158,7 @@
       avisar(r && r.qtd ? `Pregação criada com ${r.imagens} imagens.` : 'Para criar uma pregação, solte imagens (fotos).');
       return;
     }
-    const comoFundo = (S.aba === 'biblioteca' && S.bibAba === 'fundo') || S.fundo;
+    const comoFundo = S.aba === 'biblioteca' && S.bibAba === 'espera' ? 'espera' : (S.aba === 'biblioteca' && S.bibAba === 'fundo') || S.fundo;
     avisarImportacao(await window.notebook.importarArquivos(ev.dataTransfer.files, comoFundo ? null : destino, comoFundo));
   });
 
