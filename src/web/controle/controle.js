@@ -548,11 +548,13 @@
   function avisoConexao() {
     if (con.conectado) return '';
     if (con.naoAchou) return `<div class="aviso perdido">
-      <b>Não achei o notebook.</b>
-      <ol><li>Confira se o Púlpito está aberto no notebook.</li>
-        <li>Confira se o celular está no Wi-Fi da igreja.</li>
-        <li>Se ainda não der: no notebook, clique em <b>Conectar celular</b> e leia o QR code de novo.</li></ol>
-      <button class="btn primary" data-acao="procurarDeNovo">${I('procurar')} Procurar o notebook de novo</button></div>`;
+      <b>Esta página não está mais ligada ao notebook.</b>
+      <span>Escaneie o QR code de novo:</span>
+      <ol><li>No notebook, clique em <b>Conectar celular</b>.</li>
+        <li>Abra a câmera do celular e aponte para o QR code.</li>
+        <li>Toque no link que aparecer.</li></ol>
+      <span class="note">Confira também se o Púlpito está aberto no notebook e se o celular está no Wi-Fi da igreja.</span>
+      <button class="btn primary" data-acao="procurarDeNovo">${I('procurar')} Tentar achar o notebook de novo</button></div>`;
     if (con.procurando) return '<div class="aviso">Procurando o notebook na rede… só um instante.</div>';
     return '<div class="aviso">Procurando o notebook… Confira se o celular está no Wi-Fi da igreja.</div>';
   }
