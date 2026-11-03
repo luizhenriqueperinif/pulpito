@@ -12,7 +12,15 @@
   .camada.visivel { opacity: 1; }
   #c-versiculo { display: block; }
   #c-versiculo .vs { position: absolute; inset: 0; }
-  .camada img, .camada video { width: 100%; height: 100%; object-fit: contain; background: #000; }
+  /* A imagem e o vídeo ocupam exatamente a tela da TV (nunca maiores que ela). */
+  .camada img, .camada video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; }
+  /* Imagem: quase do formato da TV, preenche a tela; muito diferente (foto em pé), aparece inteira
+     e o resto da tela é a própria foto desfocada, em vez de faixas pretas. */
+  #c-imagem { overflow: hidden; }
+  #img-fundo { position: absolute; inset: -6%; width: 112%; height: 112%; object-fit: cover; filter: blur(48px) brightness(.45) saturate(1.2); z-index: 0; }
+  #c-imagem #img { z-index: 1; background: transparent; }
+  #c-imagem #img.preencher { object-fit: cover; }
+  #c-janela video { background: #000; }
   #espera-padrao {
     width: 100%; height: 100%; display: grid; place-content: center; text-align: center; gap: 2vw; color: #fff;
     background: radial-gradient(120% 90% at 50% 10%, #2a4f86 0%, #0f1d33 70%);
@@ -27,7 +35,8 @@
     <div id="espera-padrao"><div class="h">Seja bem-vindo</div><div class="s">Escolha a imagem desta tela no notebook</div></div>
     <img id="espera-img" alt="" hidden>
   </div>
-  <div class="camada" id="c-imagem"><img id="img" alt=""></div>
+  <div class="camada" id="c-imagem"><img id="img-fundo" alt="" hidden><img id="img" alt=""></div>
+  <div class="camada" id="c-janela"><video id="janela" muted playsinline></video></div>
   <div class="camada" id="c-video"><video id="video" playsinline preload="auto"></video></div>
   <div class="camada" id="c-versiculo"></div>
   <!-- Música: só som, a TV continua mostrando o que estava -->

@@ -15,7 +15,7 @@ const PASTAS_ESTATICAS = {
   telao: path.join(RAIZ, 'src', 'web', 'telao'),
   painel: path.join(RAIZ, 'src', 'web', 'painel'),
   comum: path.join(RAIZ, 'src', 'web', 'comum'),
-  fontes: path.join(RAIZ, 'node_modules', '@fontsource', 'atkinson-hyperlegible', 'files'),
+  fontes: path.join(RAIZ, 'node_modules', '@fontsource'),
 };
 const TIPOS = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
@@ -142,6 +142,68 @@ function criarServidor({ dados }) {
       fundo: reuniao ? reuniao.fundo : { pronto: 'ceu' },
     };
   }
+  // ---------- Arquivos mandados pelo celular ----------
+  // O celular manda um arquivo por vez (cada um num "lote") e no fim avisa:
+  // aí o lote inteiro entra na Biblioteca (ou vira uma Pregação) e, se quiser, na reunião.
+  const PASTA_RECEBENDO = path.join(dados.pasta, 'recebendo');
+  const LIMITE = 4 * 1024 ** 3; // 4 GB por arquivo
+  const loteValido = l => /^[a-z0-9]{8,40}$/.test(l || '');
+
+  function receberArquivo(req, res, u) {
+    const lote = u.searchParams.get('lote');
+    const i = Number(u.searchParams.get('i'));
+    // Só o nome do arquivo, sem pastas e sem caracteres que o Windows não aceita.
+    const nome = path.basename(String(u.searchParams.get('nome') || 'arquivo')).replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').slice(0, 120).replace(/^\.+$/, '') || 'arquivo';
+    if (!loteValido(lote) || !Number.isInteger(i) || i < 0 || i > 9999) { res.writeHead(400); res.end(); return; }
+    if (Number(req.headers['content-length'] || 0) > LIMITE) { res.writeHead(413); res.end(); return; }
+    const pasta = path.join(PASTA_RECEBENDO, lote, String(i).padStart(4, '0'));
+    fs.mkdirSync(pasta, { recursive: true });
+    const destino = fs.createWriteStream(path.join(pasta, nome));
+    let recebido = 0, falhou = false;
+    req.on('data', parte => { recebido += parte.length; if (recebido > LIMITE && !falhou) { falhou = true; req.destroy(); } });
+    req.pipe(destino);
+    destino.on('finish', () => { if (!falhou) { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end('{"ok":true}'); } });
+    const erro = () => { falhou = true; destino.destroy(); if (!res.headersSent) { res.writeHead(500); res.end(); } };
+    req.on('error', erro);
+    req.on('aborted', erro);
+    destino.on('error', erro);
+  }
+
+  function terminarEnvio(res, u) {
+    const lote = u.searchParams.get('lote');
+    const modo = u.searchParams.get('modo');
+    const reuniaoId = u.searchParams.get('reuniao');
+    if (!loteValido(lote)) { res.writeHead(400); res.end(); return; }
+    const pastaLote = path.join(PASTA_RECEBENDO, lote);
+    let caminhos = [];
+    try {
+      caminhos = fs.readdirSync(pastaLote).sort().flatMap(sub => fs.readdirSync(path.join(pastaLote, sub)).map(n => path.join(pastaLote, sub, n)));
+    } catch { caminhos = []; }
+    let resposta;
+    try {
+      if (modo === 'pregacao') {
+        const feito = caminhos.length ? dados.criarPregacao(caminhos, { manterOrdem: true }) : null;
+        if (feito && reuniaoId && dados.reuniao(reuniaoId)) dados.adicionarItens(reuniaoId, [feito.pregacao.id], { semRepetir: true });
+        resposta = feito
+          ? { qtd: 1, imagens: feito.pregacao.arquivos.length, ignorados: feito.ignorados, ids: [feito.pregacao.id], repetida: !!feito.repetida, titulo: feito.pregacao.titulo }
+          : { qtd: 0, ignorados: caminhos.length, ids: [] };
+      } else {
+        const { novos, repetidos, ignorados } = dados.importarArquivos(caminhos);
+        const todos = [...novos, ...repetidos].map(b => b.id);
+        if (todos.length && reuniaoId && dados.reuniao(reuniaoId)) dados.adicionarItens(reuniaoId, todos, { semRepetir: true });
+        // ids: os novos e os que já estavam (o pastor pode querer colocar na reunião do mesmo jeito)
+        resposta = { qtd: novos.length, repetidos: repetidos.length, ignorados, ids: todos };
+      }
+    } finally {
+      fs.rmSync(pastaLote, { recursive: true, force: true });
+    }
+    transmitir();
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(resposta));
+  }
+  // Sobras de envios que caíram no meio (celular saiu do Wi-Fi) são apagadas ao abrir o programa.
+  fs.rmSync(PASTA_RECEBENDO, { recursive: true, force: true });
+
   // Itens apagados ou fora de ordem durante a reunião não quebram nada:
   // o Telão continua mostrando o que estava até o pastor tocar em outro cartão.
 
@@ -151,8 +213,31 @@ function criarServidor({ dados }) {
 
     if (partes.length === 0) { res.writeHead(302, { Location: '/controle/' + u.search }); res.end(); return; }
 
+    // Logo da igreja e ícone do app: sem senha (o celular busca o ícone ao "Adicionar à tela inicial").
+    if (u.pathname === '/logo.png') { enviarArquivo(req, res, path.join(dados.pasta, 'logo.png')); return; }
+    if (u.pathname === '/icone-app.png') {
+      const daIgreja = path.join(dados.pasta, 'icone-app.png');
+      enviarArquivo(req, res, dados.config.logo && fs.existsSync(daIgreja) ? daIgreja : path.join(PASTAS_ESTATICAS.comum, 'icone-512.png'));
+      return;
+    }
+    if (u.pathname === '/manifest.webmanifest') {
+      const v = encodeURIComponent(dados.config.logo || 'padrao');
+      res.writeHead(200, { 'Content-Type': TIPOS['.webmanifest'], 'Cache-Control': 'no-cache' });
+      res.end(JSON.stringify({
+        id: '/controle/', name: 'Púlpito', short_name: 'Púlpito', lang: 'pt-BR',
+        display: 'standalone', orientation: 'portrait', background_color: '#0e0f12', theme_color: '#d70a10',
+        icons: [
+          { src: `/icone-app.png?v=${v}`, sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: `/icone-app.png?v=${v}`, sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+        ],
+      }));
+      return;
+    }
+
     if (partes[0] === 'api') {
       if (u.searchParams.get('t') !== token) { res.writeHead(403); res.end(); return; }
+      if (partes[1] === 'enviar' && req.method === 'POST') { receberArquivo(req, res, u); return; }
+      if (partes[1] === 'enviar-fim' && req.method === 'POST') { terminarEnvio(res, u); return; }
       const versao = biblia.VERSOES.includes(u.searchParams.get('v')) ? u.searchParams.get('v') : 'ACF';
       let corpo = null;
       if (partes[1] === 'biblia') corpo = biblia.indice(versao);
@@ -202,9 +287,13 @@ function criarServidor({ dados }) {
       reuniao,
       versiculo: versiculoNaTv(reuniao),
       musica: musicaTocando(),
-      musicas: dados.biblioteca.filter(b => b.tipo === 'musica').map(b => ({ id: b.id, titulo: b.titulo })),
+      musicas: dados.biblioteca.filter(b => b.tipo === 'musica').map(b => ({ id: b.id, titulo: b.titulo, categoria: b.categoria || null })),
+      categorias: dados.categoriasMusica,
+      pastores: dados.pastores.map(p => ({ id: p.id, nome: p.nome })),
+      nomesReunioes: [...new Set(dados.reunioes.map(r => r.nome).filter(Boolean))].slice(-12),
+      biblioteca: dados.biblioteca.filter(b => b.tipo !== 'fundo').map(b => ({ id: b.id, tipo: b.tipo, titulo: b.titulo, arquivo: b.arquivo, qtd: b.arquivos ? b.arquivos.length : undefined })),
       recentes: dados.recentes(reuniao?.pastorId).map(r => ({ ...r, rotulo: biblia.rotulo(r) })),
-      info: { inicio: INICIO, url, qrSvg, tv: tvStatus, telas, celulares: celularesConectados(), telaEspera: dados.config.telaEspera },
+      info: { inicio: INICIO, url, qrSvg, tv: tvStatus, telas, celulares: celularesConectados(), telaEspera: dados.config.telaEspera, logo: dados.config.logo || null },
     };
     if (completo) {
       // Só o Painel precisa de tudo para preparar as reuniões.
@@ -237,17 +326,36 @@ function criarServidor({ dados }) {
     },
     adicionarItens: c => dados.adicionarItens(c.reuniaoId, c.bibliotecaIds || []),
     adicionarVersiculo: c => dados.adicionarVersiculo(c.reuniaoId, c),
+    renomearPalavra: c => dados.renomearPalavra(c.reuniaoId, c.itemId, c.nome),
     moverPassagem: c => dados.moverPassagem(c.reuniaoId, c.passagemId, Number(c.delta) || 0),
     removerPassagem: c => dados.removerPassagem(c.reuniaoId, c.passagemId),
     moverItem: c => dados.moverItem(c.reuniaoId, c.itemId, Number(c.delta)),
     removerItem: c => dados.removerItem(c.reuniaoId, c.itemId),
     renomearArquivo: c => dados.renomearArquivo(c.id, c.titulo),
+    criarCategoria: c => dados.criarCategoria(c.nome),
+    renomearCategoria: c => dados.renomearCategoria(c.id, c.nome),
+    removerCategoria: c => dados.removerCategoria(c.id),
+    definirCategoria: c => dados.definirCategoria(c.id, c.categoria),
     removerDaBiblioteca: c => dados.removerDaBiblioteca(c.id),
     apagarAntigos: () => dados.apagarAntigos(),
   };
 
   function executar(cmd, papel, ws) {
     if ((cmd.cmd === 'videoProgresso' || cmd.cmd === 'audioProgresso') && papel !== 'telao') return;
+    if (cmd.cmd === 'colocarDaBiblioteca') {
+      if (estado.reuniaoId && Array.isArray(cmd.bibliotecaIds)) dados.adicionarItens(estado.reuniaoId, cmd.bibliotecaIds.filter(x => typeof x === 'string'));
+      transmitir();
+      return;
+    }
+    // O pastor cria uma reunião pelo celular, na hora: é de hoje, começa agora e já abre.
+    if (cmd.cmd === 'criarReuniaoAgora') {
+      const agora = new Date();
+      const hora = String(agora.getHours()).padStart(2, '0') + ':' + String(agora.getMinutes()).padStart(2, '0');
+      const pastorId = dados.pastores.some(p => p.id === cmd.pastorId) ? cmd.pastorId : null;
+      const r = dados.criarReuniao({ pastorId, nome: String(cmd.nome || '').replace(/\s+/g, ' ').trim().slice(0, 60), data: dados.hoje(), hora });
+      executar({ cmd: 'escolherReuniao', id: r.id }, papel, ws);
+      return;
+    }
     const preparo = PREPARO[cmd.cmd];
     if (preparo) {
       if (papel !== 'painel') return;

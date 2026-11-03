@@ -9,7 +9,8 @@ const pastaTemp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'auxilio-teste-'))
 
 function arquivos(...nomes) {
   const p = pastaTemp();
-  return nomes.map(n => { const c = path.join(p, n); fs.writeFileSync(c, 'x'); return c; });
+  // conteúdo diferente em cada um (arquivos iguais são reconhecidos como repetidos)
+  return nomes.map(n => { const c = path.join(p, n); fs.writeFileSync(c, 'conteúdo de ' + n); return c; });
 }
 
 function novo(hoje = '2026-11-08') {
@@ -169,11 +170,12 @@ test('dados da versão 1 são convertidos: arquivos vão para a Biblioteca', () 
   assert.equal(JSON.parse(fs.readFileSync(path.join(pasta, 'dados.json'), 'utf8')).versao, 2, 'conversão foi salva');
 });
 
-test('versículos preparados ficam todos dentro de um item "Palavra"', () => {
+test('versículos da mesma Palavra ficam dentro de um item "Palavra"', () => {
   const d = novo();
   const r = d.criarReuniao({});
+  const pal = d.reuniao(r.id).itens;
   d.adicionarVersiculo(r.id, { ref: { l: 18, c: 23, v: 1 }, ate: 6, versao: 'NVI' });
-  d.adicionarVersiculo(r.id, { ref: { l: 42, c: 3, v: 16 } });
+  d.adicionarVersiculo(r.id, { ref: { l: 42, c: 3, v: 16 }, palavraId: pal[0].id });
   const itens = d.reuniaoCompleta(r.id).itens;
   assert.equal(itens.length, 1, 'um cartão só');
   assert.equal(itens[0].tipo, 'palavra');
@@ -188,13 +190,29 @@ test('passagens da Palavra mudam de ordem e, sem nenhuma, a Palavra sai da reuni
   const d = novo();
   const r = d.criarReuniao({});
   const a = d.adicionarVersiculo(r.id, { ref: { l: 18, c: 23, v: 1 } });
-  const b = d.adicionarVersiculo(r.id, { ref: { l: 42, c: 3, v: 16 } });
+  const b = d.adicionarVersiculo(r.id, { ref: { l: 42, c: 3, v: 16 }, palavraId: d.reuniao(r.id).itens[0].id });
   d.moverPassagem(r.id, b.id, -1);
   assert.deepEqual(d.reuniaoCompleta(r.id).itens[0].passagens.map(p => p.id), [b.id, a.id]);
   d.removerPassagem(r.id, a.id);
   assert.equal(d.reuniaoCompleta(r.id).itens[0].passagens.length, 1);
   d.removerPassagem(r.id, b.id);
   assert.equal(d.reuniaoCompleta(r.id).itens.length, 0);
+});
+
+test('cada "+ Versículo" sem Palavra escolhida vira uma Palavra separada, no fim', () => {
+  const d = novo();
+  const r = d.criarReuniao({});
+  const [img] = d.importarArquivos(arquivos('convite.jpg')).novos;
+  d.adicionarVersiculo(r.id, { ref: { l: 38, c: 3, v: 10 } }); // Malaquias: dízimo
+  d.adicionarItens(r.id, [img.id]);
+  const fam = d.adicionarVersiculo(r.id, { ref: { l: 5, c: 24, v: 15 } }); // Josué: família
+  const itens = d.reuniaoCompleta(r.id).itens;
+  assert.deepEqual(itens.map(i => i.tipo), ['palavra', 'imagem', 'palavra']);
+  assert.equal(itens[0].passagens[0].titulo, 'Malaquias 3:10');
+  assert.equal(itens[2].passagens[0].titulo, 'Josué 24:15');
+  // mexer numa passagem não mexe na outra Palavra
+  d.removerPassagem(r.id, fam.id);
+  assert.deepEqual(d.reuniaoCompleta(r.id).itens.map(i => i.tipo), ['palavra', 'imagem']);
 });
 
 test('versículos soltos de antes viram uma Palavra no lugar do primeiro', () => {
@@ -286,4 +304,104 @@ test('músicas nunca são apagadas por "Apagar antigos"; pregações sim', () =>
   d.criarPregacao(arquivos('a.jpg'));
   d.hoje = () => '2026-12-31';
   assert.deepEqual(d.antigos().map(b => b.tipo), ['pregacao']);
+});
+
+test('a Palavra pode ter nome ("Palavra do dízimo"); sem nome aparece "Palavra"', () => {
+  const d = novo();
+  const r = d.criarReuniao({});
+  d.adicionarVersiculo(r.id, { ref: { l: 38, c: 3, v: 10 }, nome: '  Palavra   do dízimo ' });
+  d.adicionarVersiculo(r.id, { ref: { l: 5, c: 24, v: 15 } });
+  let [diz, fam] = d.reuniaoCompleta(r.id).itens;
+  assert.equal(diz.titulo, 'Palavra do dízimo');
+  assert.equal(fam.titulo, 'Palavra');
+  d.renomearPalavra(r.id, fam.id, 'Palavra da família');
+  d.adicionarVersiculo(r.id, { ref: { l: 18, c: 128, v: 1 }, palavraId: diz.id }); // sem nome: não apaga o que tinha
+  [diz, fam] = d.reuniaoCompleta(r.id).itens;
+  assert.equal(fam.titulo, 'Palavra da família');
+  assert.equal(diz.titulo, 'Palavra do dízimo');
+  assert.equal(diz.passagens.length, 2);
+  d.renomearPalavra(r.id, fam.id, '   ');
+  assert.equal(d.reuniaoCompleta(r.id).itens[1].titulo, 'Palavra');
+});
+
+test('o mesmo arquivo não entra duas vezes na Biblioteca, mesmo com outro nome', () => {
+  const d = novo();
+  const [a] = arquivos('IMG-WA0001.jpg');
+  const p = pastaTemp();
+  const copia = path.join(p, 'IMG-WA0099.jpg'); fs.copyFileSync(a, copia);   // reenviado pelo WhatsApp
+  const r1 = d.importarArquivos([a]);
+  assert.equal(r1.novos.length, 1);
+  const r2 = d.importarArquivos([copia, ...arquivos('outra.jpg')]);
+  assert.equal(r2.novos.length, 1, 'só a outra foto é nova');
+  assert.equal(r2.repetidos.length, 1);
+  assert.equal(r2.repetidos[0].id, r1.novos[0].id, 'devolve a que já estava');
+  assert.equal(d.biblioteca.length, 2);
+  // na mesma escolha, duas vezes o mesmo arquivo também não duplica
+  const r3 = d.importarArquivos([...arquivos('nova.png'), ...arquivos('nova.png')]);
+  assert.equal(r3.novos.length, 1);
+  assert.equal(d.biblioteca.length, 3);
+});
+
+test('arquivo repetido entra na reunião só uma vez', () => {
+  const d = novo();
+  const r = d.criarReuniao({});
+  const [a] = arquivos('convite.jpg');
+  const { novos } = d.importarArquivos([a]);
+  d.adicionarItens(r.id, [novos[0].id], { semRepetir: true });
+  const { repetidos } = d.importarArquivos([a]);
+  d.adicionarItens(r.id, repetidos.map(b => b.id), { semRepetir: true });
+  assert.equal(d.reuniao(r.id).itens.length, 1);
+});
+
+test('a mesma imagem pode ser foto e também fundo de versículo', () => {
+  const d = novo();
+  const [a] = arquivos('ceu.jpg');
+  d.importarArquivos([a]);
+  const r = d.importarArquivos([a], { comoFundo: true });
+  assert.equal(r.novos.length, 1);
+  assert.equal(r.novos[0].tipo, 'fundo');
+});
+
+test('a mesma pregação não é criada duas vezes', () => {
+  const d = novo();
+  const imgs = arquivos('1.png', '2.png', '3.png');
+  const a = d.criarPregacao(imgs);
+  const b = d.criarPregacao(imgs);
+  assert.equal(b.repetida, true);
+  assert.equal(b.pregacao.id, a.pregacao.id);
+  assert.equal(d.biblioteca.filter(x => x.tipo === 'pregacao').length, 1);
+  // outra ordem é outra pregação
+  assert.ok(!d.criarPregacao([imgs[2], imgs[1], imgs[0]], { manterOrdem: true }).repetida);
+});
+
+test('arquivos de antes (sem marca) também são reconhecidos', () => {
+  const d = novo();
+  const [a] = arquivos('antigo.jpg');
+  d.importarArquivos([a]);
+  delete d.biblioteca[0].marca;           // como os que entraram antes desta versão
+  assert.equal(d.importarArquivos([a]).repetidos.length, 1);
+  assert.ok(d.biblioteca[0].marca, 'ganhou a marca');
+});
+
+test('categorias de música: criar, pôr música, mudar nome e apagar', () => {
+  const d = novo();
+  d.biblioteca.push({ id: 'h1', tipo: 'musica', titulo: 'Hino 1', arquivo: 'h1.mp3', criadoEm: '2026-11-01' });
+  d.biblioteca.push({ id: 'f1', tipo: 'imagem', titulo: 'Foto', arquivo: 'f.jpg', criadoEm: '2026-11-01' });
+  const c = d.criarCategoria('  Oração   forte ');
+  assert.equal(c.nome, 'Oração forte');
+  assert.equal(d.criarCategoria('oração FORTE').id, c.id, 'nome repetido não cria outra');
+  assert.equal(d.criarCategoria('   '), null);
+  d.definirCategoria('h1', c.id);
+  d.definirCategoria('f1', c.id);  // foto não tem categoria
+  assert.equal(d.arquivoDaBiblioteca('h1').categoria, c.id);
+  assert.equal(d.arquivoDaBiblioteca('f1').categoria, undefined);
+  d.definirCategoria('h1', 'nao-existe');
+  assert.equal(d.arquivoDaBiblioteca('h1').categoria, undefined);
+  d.definirCategoria('h1', c.id);
+  d.renomearCategoria(c.id, 'Fundo de busca');
+  assert.equal(d.categoriasMusica[0].nome, 'Fundo de busca');
+  d.removerCategoria(c.id);
+  assert.equal(d.categoriasMusica.length, 0);
+  assert.ok(d.arquivoDaBiblioteca('h1'), 'a música continua na Biblioteca');
+  assert.equal(d.arquivoDaBiblioteca('h1').categoria, undefined);
 });

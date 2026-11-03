@@ -129,3 +129,55 @@ body { min-height: 100vh; min-height: 100dvh; }
 .slide img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .slide span { position: absolute; left: 4px; top: 4px; background: rgba(0,0,0,.7); color: #fff; font-weight: 700; font-size: 14px; padding: 1px 7px; border-radius: 99px; }
 .slide.on { border-color: var(--live); box-shadow: 0 0 0 2px var(--live); }
+
+/* Mandar arquivos */
+.envio-btn { flex-direction: column; gap: 4px; cursor: pointer; }
+.envio-btn small { font-size: 15px; font-weight: 400; }
+.envio-andamento { display: grid; gap: 14px; text-align: center; justify-items: stretch; padding-top: 12px; }
+.envio-andamento .grande { font-size: 56px; }
+.envio-andamento h3 { margin: 0; font-size: 23px; text-wrap: balance; }
+.envio-andamento .bar { height: 18px; }
+
+/* Colocar da Biblioteca */
+.abas4 { grid-template-columns: 1fr 1fr; }
+.bibs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.bib { display: grid; gap: 6px; padding: 0 0 8px; text-align: left; border: 3px solid var(--line); border-radius: var(--radius); overflow: hidden; background: var(--surface); font: inherit; color: inherit; }
+.bib.on { border-color: var(--live); box-shadow: 0 0 0 2px var(--live); }
+.bib-img { position: relative; display: grid; place-items: center; aspect-ratio: 16 / 9; background: #000; }
+.bib-img img { width: 100%; height: 100%; object-fit: cover; }
+.bib-img .ic-grande { font-size: 40px; }
+.bib-img .ordem { position: absolute; left: 6px; top: 6px; background: var(--live); color: var(--surface); font-size: 16px; padding: 2px 9px; border-radius: 99px; }
+.bib-img .qtd { position: absolute; right: 6px; bottom: 6px; background: rgba(0,0,0,.75); color: #fff; font-style: normal; font-weight: 700; font-size: 13px; padding: 1px 7px; border-radius: 99px; }
+.bib-t { padding: 0 10px; font-weight: 700; font-size: 16px; line-height: 1.2; overflow-wrap: anywhere; }
+.bib-ja { padding: 0 10px; font-size: 13px; color: var(--muted); }
+.painel > .toolbar { position: static; }
+
+/* ---------- Visual Púlpito (tema Universal) ---------- */
+.marca-cel { display: flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 800; letter-spacing: -.01em; color: var(--accent); }
+.marca-cel .marca-logo { width: 32px; height: 32px; border-radius: 8px; }
+.top .nome { font-size: 24px; font-weight: 800; letter-spacing: -.01em; }
+.reuniao-btn { border: 1.5px solid var(--line); box-shadow: var(--shadow); }
+.tv { border-radius: 14px; }
+.media { border-width: 1.5px; box-shadow: 0 0 0 3px var(--live-bg); }
+.card { border: 1.5px solid var(--line); box-shadow: var(--shadow); min-height: 82px; }
+.card .ic { border-radius: 12px; }
+.card.on { border: 2px solid var(--live); background: var(--live-bg); box-shadow: 0 0 0 3px var(--live-bg); }
+.chip { font-weight: 800; letter-spacing: .02em; color: #ffffff; }
+.toolbar { background: var(--surface); box-shadow: 0 -6px 20px rgba(0, 0, 0, .06); }
+.toolbar .btn { border: 0; background: var(--surface-2); }
+.toolbar .btn.danger { background: var(--danger-bg); }
+.toolbar .btn.live { background: var(--live-bg); }
+.capbar .contador { border-width: 1.5px; }
+.bib { border-width: 1.5px; box-shadow: var(--shadow); }
+
+/* Categorias de música no celular */
+.cats-musica { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.cats-musica .btn { min-height: 56px; font-size: 17px; }
+.cats-musica .btn.sel { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+
+/* Criar reunião pelo celular */
+.nova-reuniao { display: grid; gap: 12px; }
+.escolha-cel { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.escolha-cel .btn { min-height: 56px; font-size: 16px; }
+.escolha-cel .btn.sel { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.campo-cel { font: inherit; font-size: 18px; padding: 12px 14px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--surface); color: var(--ink); min-height: 56px; width: 100%; box-sizing: border-box; }

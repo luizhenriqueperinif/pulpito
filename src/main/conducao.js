@@ -5,7 +5,7 @@
 const VOLUME_MAX = 10;
 
 function estadoInicial(volume = 7) {
-  return { reuniaoId: null, tv: { tipo: 'espera' }, tvAntesPreto: null, tvAntesAvulso: null, video: null, audio: null, volume };
+  return { reuniaoId: null, tv: { tipo: 'espera' }, tvAntesPreto: null, tvAntesAvulso: null, tvAntesJanela: null, video: null, audio: null, volume };
 }
 
 const refValida = r => r && Number.isInteger(r.l) && Number.isInteger(r.c) && Number.isInteger(r.v);
@@ -111,6 +111,27 @@ function aplicar(e, cmd, ctx) {
       const igual = ref.l === e.tv.ref.l && ref.c === e.tv.ref.c && ref.v === e.tv.ref.v;
       if (igual || !refValida(ref) || !ctx.existe(ctx.versao(e), ref)) return e;
       return { ...e, tv: { ...e.tv, ref } };
+    }
+
+    case 'mostrarJanela': {
+      // Uma janela do notebook (Telegram, navegador...) aparece na TV, ao vivo.
+      if (typeof cmd.fonteId !== 'string' || !cmd.fonteId) return e;  // vale mesmo sem reunião começada
+      const nome = String(cmd.nome || 'Janela do notebook').slice(0, 80);
+      let antes = e.tvAntesJanela;
+      if (e.tv.tipo !== 'janela') antes = e.tv.tipo === 'preto' ? (e.tvAntesPreto ?? { tipo: 'espera' }) : e.tv;
+      return {
+        ...e,
+        tv: { tipo: 'janela', fonteId: cmd.fonteId, nome },
+        tvAntesJanela: antes,
+        tvAntesPreto: null,
+        video: e.video ? { ...e.video, tocando: false } : null,
+        audio: null,   // como qualquer coisa nova na TV, a música para
+      };
+    }
+
+    case 'sairJanela': {
+      if (e.tv.tipo !== 'janela') return e;
+      return { ...e, tv: e.tvAntesJanela ?? { tipo: 'espera' }, tvAntesJanela: null };
     }
 
     case 'voltarReuniao': {

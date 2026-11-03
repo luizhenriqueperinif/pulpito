@@ -1,7 +1,7 @@
 // Telão: mostra o que a Condução manda. Se a conexão cair, continua mostrando o que estava.
 (function () {
   const $ = id => document.getElementById(id);
-  const camadas = { espera: $('c-espera'), imagem: $('c-imagem'), video: $('c-video'), versiculo: $('c-versiculo') };
+  const camadas = { espera: $('c-espera'), imagem: $('c-imagem'), video: $('c-video'), versiculo: $('c-versiculo'), janela: $('c-janela') };
   const img = $('img');
   const video = $('video');
   const audio = $('audio');
@@ -28,6 +28,36 @@
   window.addEventListener('resize', () => window.Versiculo.ajustar(camadas.versiculo));
   if (document.fonts) document.fonts.ready.then(() => window.Versiculo.ajustar(camadas.versiculo));
 
+  // Janela do notebook ao vivo na TV. O som sai pelo próprio computador, então o vídeo daqui fica mudo.
+  const janela = $('janela');
+  let fonteAtual = null, fluxo = null;
+  function pararJanela() {
+    if (fluxo) fluxo.getTracks().forEach(t => t.stop());
+    fluxo = null; fonteAtual = null; janela.srcObject = null;
+  }
+  async function mostrarJanela(fonteId) {
+    if (fonteAtual === fonteId && fluxo) { mostrarCamada('janela'); return; }
+    pararJanela();
+    fonteAtual = fonteId;
+    try {
+      const f = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: fonteId, maxWidth: 1920, maxHeight: 1080, maxFrameRate: 30 } },
+      });
+      if (fonteAtual !== fonteId) { f.getTracks().forEach(t => t.stop()); return; }
+      fluxo = f;
+      // A janela foi fechada: a TV volta para o que estava antes.
+      f.getVideoTracks()[0].addEventListener('ended', () => { if (fonteAtual === fonteId) { pararJanela(); conexao.enviar({ cmd: 'sairJanela' }); } });
+      janela.srcObject = f;
+      await janela.play().catch(() => {});
+      mostrarCamada('janela');
+    } catch (err) {
+      console.log('Não deu para mostrar a janela:', err && err.message);
+      pararJanela();
+      conexao.enviar({ cmd: 'sairJanela' });
+    }
+  }
+
   function aplicar(msg) {
     const { estado, reuniao, info } = msg;
 
@@ -45,6 +75,8 @@
     audio.volume = video.volume;
     aplicarAudio(estado.audio, msg.musica);
 
+    if (estado.tv.tipo === 'janela') { pararVideo(); mostrarJanela(estado.tv.fonteId); return; }
+    if (fonteAtual) pararJanela();
     if (estado.tv.tipo === 'espera') { pararVideo(); mostrarCamada('espera'); return; }
     if (estado.tv.tipo === 'preto') { video.pause(); mostrarCamada(null); return; }
     if (estado.tv.ref && msg.versiculo) {
@@ -67,7 +99,17 @@
       atual.arquivo = src;
       // Só troca quando a nova imagem já carregou, para não piscar.
       const nova = new Image();
-      nova.onload = () => { if (atual.arquivo === src) { img.src = src; mostrarCamada('imagem'); } };
+      nova.onload = () => {
+        if (atual.arquivo !== src) return;
+        // Quanto da imagem seria cortado para encher a TV? Até 15%, enche; mais que isso, mostra inteira.
+        const tela = innerWidth / innerHeight, foto = nova.naturalWidth / nova.naturalHeight;
+        const corte = 1 - Math.min(tela, foto) / Math.max(tela, foto);
+        const preencher = corte <= 0.15;
+        img.classList.toggle('preencher', preencher);
+        const fundo = $('img-fundo'); fundo.hidden = preencher; if (!preencher) fundo.src = src;
+        img.src = src;
+        mostrarCamada('imagem');
+      };
       nova.src = src;
       return;
     }

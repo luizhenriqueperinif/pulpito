@@ -75,15 +75,27 @@
   }
 
   // ---------- partes fixas (topo, QR) ----------
-  let ultimoQr = '';
+  let ultimoQr = '', ultimaLogo;
   function desenharFixos() {
     const i = M.info;
-    const tv = i.tv === 'tv' ? '<span class="pill ok">TV ligada</span>' : '<span class="pill atencao">TV não encontrada</span>';
-    const cel = i.celulares > 0
-      ? `<span class="pill ok">📱 ${i.celulares} ${i.celulares === 1 ? 'celular' : 'celulares'}</span>`
-      : '<span class="pill">📱 nenhum celular</span>';
-    const agora = M.reuniao ? `<span class="pill ok">● ${esc(tituloReuniao(M.reuniao))}</span>` : '';
+    // Rodapé do menu: o que está acontecendo agora
+    const linha = (cls, txt) => `<span class="st ${cls}"><i class="dot"></i>${txt}</span>`;
+    const tv = i.tv === 'tv' ? linha('ok', 'TV ligada') : linha('atencao', 'TV não encontrada');
+    const cel = i.celulares > 0 ? linha('ok', `${i.celulares} ${i.celulares === 1 ? 'celular conectado' : 'celulares conectados'}`) : linha('', 'Nenhum celular');
+    const agora = M.reuniao ? linha('ok vivo', `Ao vivo: ${esc(tituloReuniao(M.reuniao))}`) : '';
     $('status').innerHTML = agora + tv + cel;
+    // Botão de mostrar uma janela do notebook na TV (Telegram, Univervideo...): sempre à mão.
+    const naTv = M.estado && M.estado.tv.tipo === 'janela';
+    $('janela-tv').innerHTML = naTv ? `<div class="janela-viva"><small>Na TV agora</small><b>${esc(M.estado.tv.nome)}</b></div>
+          <button class="btn primary bloco" data-a="sairJanela">↩ Voltar para o Púlpito</button>`
+      : '<button class="btn bloco lado-btn" data-a="abrirJanelas">📺 Mostrar uma janela na TV</button>';
+    // Logo da igreja (ou a cruz do Púlpito)
+    if (i.logo !== ultimaLogo) {
+      ultimaLogo = i.logo;
+      $('marca-img').innerHTML = i.logo
+        ? `<img class="marca-logo" src="/logo.png?v=${encodeURIComponent(i.logo)}" alt="">`
+        : '<img class="marca-logo" src="/comum/icone.svg" alt="">';
+    }
     if (i.qrSvg !== ultimoQr) { $('qr').innerHTML = i.qrSvg; ultimoQr = i.qrSvg; }
     $('url').textContent = i.url;
   }
@@ -111,7 +123,7 @@
     else if (S.aba === 'biblioteca') html = biblioteca();
     else if (S.aba === 'config') html = configuracoes();
     $('conteudo').innerHTML = html;
-    $('modal').innerHTML = S.escolher ? janelaEscolher() : S.testar != null ? janelaTestar() : S.verso ? janelaVerso() : S.fundo ? janelaFundo() : '';
+    $('modal').innerHTML = S.janelas ? escolherJanela() : S.escolher ? janelaEscolher() : S.testar != null ? janelaTestar() : S.verso ? janelaVerso() : S.fundo ? janelaFundo() : '';
     window.Versiculo.ajustar(document.body);
     const v = document.querySelector('#modal video'); if (v) v.volume = 0.5;
   }
@@ -209,7 +221,7 @@
           <button class="btn sm" data-a="moverPassagem" data-v="${p.id}" data-d="1" ${i === n - 1 ? 'disabled' : ''} aria-label="Descer">↓</button>
           <button class="btn sm danger" data-a="tirarPassagem" data-v="${p.id}" aria-label="Tirar versículo">🗑</button>
         </div></div>`).join('')}
-      <div><button class="btn sm" data-a="abrirVerso">📖 + Outro versículo</button></div></div>`;
+      <div><button class="btn sm" data-a="abrirVerso" data-v="${it.id}">📖 + Outro versículo nesta Palavra</button></div></div>`;
   }
 
   function editor() {
@@ -217,9 +229,11 @@
     const naTv = M.estado.reuniaoId === r.id && M.estado.tv.tipo === 'item' ? M.estado.tv.itemId : null;
     const itens = r.itens.map((it, i) => `<div class="item ${naTv === it.id ? 'na-tv' : ''}" draggable="true" data-item="${it.id}" title="Arraste para mudar a ordem">
         <span class="n"><span class="alca" aria-hidden="true">⠿</span><span class="num">${i + 1}</span></span>${miniatura(it)}
-        <div><div class="t">${it.tipo === 'palavra' ? '📖 Palavra' : esc(it.titulo)}</div><div class="d">${it.tipo === 'palavra'
-          ? `${it.passagens.length} ${it.passagens.length === 1 ? 'passagem' : 'passagens'} · no celular é um cartão só, com as setas ◀ ▶`
-          : it.tipo === 'pregacao' ? `Pregação · ${it.arquivos.length} imagens · no celular passa com ◀ ▶`
+        <div><div class="t">${it.tipo === 'palavra'
+          ? `📖 <input class="nome-palavra" data-palavra="${it.id}" value="${esc(it.nome || '')}" placeholder="Palavra" maxlength="40" aria-label="Nome do cartão" title="Clique para mudar o nome do cartão">`
+          : esc(it.titulo)}</div><div class="d">${it.tipo === 'palavra'
+          ? `${it.passagens.length} ${it.passagens.length === 1 ? 'passagem' : 'passagens'} · no celular é um cartão, com as setas ◀ ▶`
+          : it.tipo === 'pregacao' ? `Pregação · ${it.arquivos.length} ${it.arquivos.length === 1 ? 'imagem' : 'imagens'} · no celular passa com ◀ ▶`
           : TIPO[it.tipo] || it.tipo}${naTv === it.id ? ' · <span class="ao-vivo">na TV agora</span>' : ''}</div></div>
         <div class="acoes">
           <button class="btn" data-a="mover" data-v="${it.id}" data-d="-1" ${i === 0 ? 'disabled' : ''} aria-label="Subir">↑</button>
@@ -266,7 +280,8 @@
       : `<div class="t">${esc(b.titulo)}</div>`;
     const antigo = M.antigos.includes(b.id);
     return `<div class="arq">${thumb}
-      <div class="info">${nome}<div class="d">${b.arquivos ? `${b.arquivos.length} imagens · ` : ''}Adicionado em ${ddmm(b.criadoEm)} · ${b.usos ? `em ${b.usos} ${b.usos === 1 ? 'reunião' : 'reuniões'}` : 'não está em reunião'}${antigo ? ' · antigo' : ''}</div></div>
+      <div class="info">${nome}${b.tipo === 'musica' && (M.categorias || []).length ? `<label class="cat-escolha"><span>Categoria</span>
+          <select data-categoria="${b.id}"><option value="">Sem categoria</option>${M.categorias.map(c => `<option value="${c.id}" ${b.categoria === c.id ? 'selected' : ''}>${esc(c.nome)}</option>`).join('')}</select></label>` : ''}<div class="d">${b.arquivos ? `${b.arquivos.length} imagens · ` : ''}Adicionado em ${ddmm(b.criadoEm)} · ${b.usos ? `em ${b.usos} ${b.usos === 1 ? 'reunião' : 'reuniões'}` : 'não está em reunião'}${antigo ? ' · antigo' : ''}</div></div>
       <div class="acoes">
         ${S.renomear === b.id
           ? `<button class="btn primary" data-a="salvarNome" data-v="${b.id}">Salvar</button><button class="btn" data-a="cancelarNome">Cancelar</button>`
@@ -274,19 +289,45 @@
       </div></div>`;
   }
 
+  // Abas dos tipos de arquivo: uma linha só, todas do mesmo tamanho; com pouco espaço o ícone vai para cima.
   function subAbas(atual, acao) {
     const qtd = t => M.biblioteca.filter(b => b.tipo === t).length;
-    return `<div class="sub-abas">
-      <button class="btn ${atual === 'video' ? 'sel' : ''}" data-a="${acao}" data-v="video">🎬 Vídeos (${qtd('video')})</button>
-      <button class="btn ${atual === 'imagem' ? 'sel' : ''}" data-a="${acao}" data-v="imagem">🖼️ Imagens (${qtd('imagem')})</button>
-      <button class="btn ${atual === 'pregacao' ? 'sel' : ''}" data-a="${acao}" data-v="pregacao">📑 Pregações (${qtd('pregacao')})</button>
-      <button class="btn ${atual === 'musica' ? 'sel' : ''}" data-a="${acao}" data-v="musica">🎵 Músicas (${qtd('musica')})</button>
-      ${acao === 'bibAba' ? `<button class="btn ${atual === 'fundo' ? 'sel' : ''}" data-a="${acao}" data-v="fundo">🎨 Fundos de versículo (${qtd('fundo')})</button>` : ''}
-    </div>`;
+    const tipos = [['video', '🎬', 'Vídeos'], ['imagem', '🖼️', 'Imagens'], ['pregacao', '📑', 'Pregações'], ['musica', '🎵', 'Músicas']];
+    if (acao === 'bibAba') tipos.push(['fundo', '🎨', 'Fundos de versículo', 'Fundos']);
+    const nome = (longo, curto) => curto ? `<span class="longo">${longo}</span><span class="curto">${curto}</span>` : longo;
+    return `<div class="tipos-caixa"><div class="tipos">${tipos.map(([t, ic, longo, curto]) => `
+      <button class="btn ${atual === t ? 'sel' : ''}" data-a="${acao}" data-v="${t}" title="${longo}">
+        <span class="ic">${ic}</span><span class="nm">${nome(longo, curto)}</span><span class="qt">${qtd(t)}</span>
+      </button>`).join('')}</div></div>`;
+  }
+
+  // Barra de categorias (só na aba Músicas)
+  function barraCategorias() {
+    const cats = M.categorias || [];
+    const musicas = M.biblioteca.filter(b => b.tipo === 'musica');
+    const n = cid => musicas.filter(b => (cid === 'sem' ? !b.categoria : b.categoria === cid)).length;
+    const f = S.catFiltro || 'todas';
+    const chip = (v, nome, qtd) => `<button class="btn sm ${f === v ? 'sel' : ''}" data-a="catFiltro" data-v="${v}">${esc(nome)} (${qtd})</button>`;
+    const atual = cats.find(c => c.id === f);
+    const form = S.catForm
+      ? `<form class="cat-form" id="form-categoria" autocomplete="off">
+          <input type="text" id="cat-nome" value="${esc(S.catForm.nome || '')}" placeholder="Ex.: Oração forte" maxlength="40" aria-label="Nome da categoria">
+          <button type="submit" class="btn primary sm">${S.catForm.id ? 'Salvar' : 'Criar'}</button>
+          <button type="button" class="btn sm" data-a="catCancelar">Cancelar</button></form>`
+      : `<div class="acoes"><button class="btn sm" data-a="catNova">+ Nova categoria</button>
+          ${atual ? `<button class="btn sm" data-a="catRenomear" data-v="${atual.id}">✏️ Mudar nome de "${esc(atual.nome)}"</button>
+            <button class="btn sm danger" data-a="catApagar" data-v="${atual.id}">🗑 Apagar categoria</button>` : ''}</div>`;
+    return `<div class="caixa categorias">
+        <div class="cabeca"><h2>Categorias</h2><span class="note">O pastor escolhe a música por categoria no celular.</span></div>
+        <div class="sub-abas">${chip('todas', 'Todas', musicas.length)}${cats.map(c => chip(c.id, c.nome, n(c.id))).join('')}${cats.length && n('sem') ? chip('sem', 'Sem categoria', n('sem')) : ''}</div>
+        ${form}
+      </div>`;
   }
 
   function biblioteca() {
-    const lista = M.biblioteca.filter(b => b.tipo === S.bibAba).slice().reverse();
+    let lista = M.biblioteca.filter(b => b.tipo === S.bibAba).slice().reverse();
+    const f = S.catFiltro || 'todas';
+    if (S.bibAba === 'musica' && f !== 'todas') lista = lista.filter(b => (f === 'sem' ? !b.categoria : b.categoria === f));
     const antigos = M.antigos.length;
     return `<div class="pagina">
       <div class="cabeca"><h1>Biblioteca</h1>
@@ -298,6 +339,7 @@
         </div></div>
       <p class="note">"Apagar antigos" apaga fotos, vídeos e pregações que não foram usados nos últimos 7 dias e não estão em nenhuma reunião de hoje em diante. Músicas e fundos nunca são apagados por ele.</p>
       ${subAbas(S.bibAba, 'bibAba')}
+      ${S.bibAba === 'musica' ? barraCategorias() : ''}
       ${lista.length ? `<div class="grade">${lista.map(b => cartaoArquivo(b)).join('')}</div>`
         : `<div class="vazio"><div class="grande">${S.bibAba === 'fundo' ? '🎨' : '🗂️'}</div><div>${S.bibAba === 'video' ? 'Nenhum vídeo ainda.' : S.bibAba === 'musica' ? 'Nenhuma música ainda. Hinos, louvores e fundos de oração ficam guardados aqui para sempre.' : S.bibAba === 'pregacao' ? 'Nenhuma pregação ainda. Use "+ Nova pregação" e escolha todas as imagens que o bispo mandou.' : S.bibAba === 'fundo' ? 'Nenhum fundo próprio ainda. Os fundos que vêm no programa aparecem na hora de escolher o fundo da reunião.' : 'Nenhuma imagem ainda.'}</div></div>`}
     </div>`;
@@ -366,11 +408,19 @@
     }
     return v.textos;
   }
+  const SUGESTOES_NOME = ['Palavra', 'Palavra do dízimo', 'Palavra da oferta', 'Palavra da família', 'Palavra da libertação'];
+  document.addEventListener('input', ev => {
+    if (ev.target.id === 'v-nome' && S.verso) S.verso.nome = ev.target.value;
+  });
+  document.addEventListener('change', ev => {
+    const pal = ev.target.closest && ev.target.closest('input[data-palavra]');
+    if (pal) enviar({ cmd: 'renomearPalavra', reuniaoId: S.aberta, itemId: pal.dataset.palavra, nome: pal.value });
+  });
   function janelaVerso() {
     const v = S.verso;
     const r = reuniaoAberta();
     const idx = indice(versaoDoVerso());
-    const cab = `<header><h2>📖 Colocar versículo na reunião</h2><button class="btn sm" data-a="fecharModal">✕ Fechar</button></header>`;
+    const cab = `<header><h2>${v.palavraId ? '📖 Mais um versículo nesta Palavra' : '📖 Nova Palavra (entra no fim da reunião)'}</h2><button class="btn sm" data-a="fecharModal">✕ Fechar</button></header>`;
     if (!idx || !r) return `<div class="fundo-modal"><div class="janela">${cab}<div class="corpo"><div class="vazio">Abrindo a Bíblia…</div></div></div></div>`;
     const livro = v.l != null ? idx[v.l] : null;
 
@@ -416,6 +466,9 @@
           <button type="submit" class="btn primary">Achar</button></form>
         <p class="note">Ou escolha tocando:</p>
         ${trilha}${escolha}${previa}
+        <div class="campo"><span>Nome do cartão (aparece no celular)</span>
+          <input type="text" id="v-nome" value="${esc(v.nome || '')}" placeholder="Palavra" maxlength="40">
+          <div class="escolha">${SUGESTOES_NOME.map(n => `<button type="button" class="btn sm ${(v.nome || 'Palavra') === n ? 'sel' : ''}" data-a="versoNome" data-v="${esc(n)}">${esc(n)}</button>`).join('')}</div></div>
         <div class="campo"><span>Bíblia</span><div class="escolha">
           ${opcoesVersao.map(([val, nome]) => `<button type="button" class="btn ${v.versao === val ? 'sel' : ''}" data-a="versoVersao" data-v="${val || ''}">${nome}</button>`).join('')}
         </div></div>
@@ -440,6 +493,34 @@
       <div class="corpo"><p class="note">Toque no fundo que você quer. Todos os versículos desta reunião aparecem com ele, inclusive os escolhidos na hora pelo celular.</p>
         <div class="fundos">${opcoes.map(tile).join('')}</div></div>
       <footer><button class="btn" data-a="importar">+ Usar uma imagem minha</button><button class="btn primary" data-a="fecharModal">Pronto</button></footer>
+    </div></div>`;
+  }
+
+  // ---------- Mostrar uma janela do notebook na TV ----------
+  async function carregarJanelas() {
+    let lista = [];
+    try { lista = await window.notebook.listarJanelas(); } catch (e) { lista = []; }
+    if (S.janelas) { S.janelas.lista = lista; desenhar(); }
+  }
+  function escolherJanela() {
+    const l = S.janelas.lista;
+    const corpo = l === null ? '<p class="note">Procurando as janelas abertas…</p>'
+      : !l.length ? '<p class="note">Nenhuma janela aberta. Abra o vídeo no Telegram ou no navegador e clique em "Procurar de novo".</p>'
+      : `<div class="janelas">${l.map(j => `<button class="janela-op" data-a="mostrarJanela" data-v="${esc(j.id)}">
+          <span class="amostra"><img src="${j.miniatura}" alt=""></span>
+          <span class="nome">${j.icone ? `<img src="${j.icone}" alt="">` : ''}${esc(j.nome)}</span></button>`).join('')}</div>`;
+    return `<div class="fundo-modal"><div class="janela" role="dialog" aria-label="Mostrar uma janela na TV">
+      <header><h2>📺 Qual janela vai aparecer na TV?</h2><button class="btn sm" data-a="fecharModal">✕ Fechar</button></header>
+      <div class="corpo">
+        <ol class="dicas">
+          <li>Abra o vídeo antes (no Telegram ou no navegador) e deixe <b>pausado</b>.</li>
+          <li>Clique na janela abaixo. A TV mostra só ela, ao vivo; o resto do notebook não aparece.</li>
+          <li>Para ficar só o vídeo, coloque o vídeo em <b>tela cheia</b> e dê o play.</li>
+          <li>Não minimize a janela enquanto ela estiver na TV.</li>
+        </ol>
+        ${corpo}
+      </div>
+      <footer><button class="btn" data-a="recarregarJanelas">🔄 Procurar de novo</button><span class="note">Para voltar: toque em qualquer cartão no celular ou em "Voltar para o Púlpito".</span></footer>
     </div></div>`;
   }
 
@@ -479,7 +560,49 @@
           ${M.info.telas > 1 ? 'Se a TV e o notebook estiverem trocados, use o botão abaixo.' : ''}</p>
         ${M.info.telas > 1 ? '<div class="acoes"><button class="btn" data-a="trocarTelas">Trocar TV ⇄ notebook</button></div>' : ''}
       </section>
+      <section class="caixa">
+        <h2>Logo da igreja</h2>
+        <p class="note">Aparece no menu do notebook, no celular do pastor e no ícone do app no celular. Use uma imagem PNG com fundo transparente.</p>
+        <div class="logo-linha">
+          <div class="logo-amostra">${M.info.logo ? `<img src="/logo.png?v=${encodeURIComponent(M.info.logo)}" alt="Logo atual">` : '<img src="/comum/icone.svg" alt="Cruz do Púlpito">'}</div>
+          <div class="pilha">
+            <div class="t-grande">${M.info.logo ? 'A logo da igreja está sendo usada.' : 'Sem logo: aparece a cruz do Púlpito.'}</div>
+            <div class="acoes"><button class="btn primary sm" data-a="escolherLogo">${M.info.logo ? 'Trocar logo' : 'Escolher logo'}</button>
+              ${M.info.logo ? '<button class="btn sm" data-a="tirarLogo">Tirar logo</button>' : ''}</div>
+          </div>
+        </div>
+        <details class="ajuda"><summary>Como colocar o ícone na tela do celular</summary>
+          <ol class="passos">
+            <li>Conecte o celular pelo QR code (menu <strong>Conectar celular</strong>).</li>
+            <li><strong>Android (Chrome):</strong> toque no menu <strong>⋮</strong> e em <strong>Adicionar à tela inicial</strong>.</li>
+            <li><strong>iPhone (Safari):</strong> toque no botão de compartilhar e em <strong>Adicionar à Tela de Início</strong>.</li>
+            <li>Se trocar a logo depois, apague o ícone do celular e coloque de novo.</li>
+          </ol></details>
+      </section>
+      ${secaoWindows()}
     </div>`;
+  }
+
+  // Opções do Windows (vêm do programa, não do servidor)
+  let opcoesWindows = null;
+  function carregarOpcoes() {
+    if (!window.notebook?.opcoes) return;
+    window.notebook.opcoes().then(o => { opcoesWindows = o; desenhar(); });
+  }
+  carregarOpcoes();
+  function secaoWindows() {
+    const o = opcoesWindows;
+    if (!o) return '';
+    const simNao = (nome, valor) => `<div class="escolha">
+        <button class="btn ${valor ? 'sel' : ''}" data-a="opcao" data-v="${nome}" data-sim="1">Sim</button>
+        <button class="btn ${!valor ? 'sel' : ''}" data-a="opcao" data-v="${nome}" data-sim="0">Não</button></div>`;
+    return `<section class="caixa">
+        <h2>Windows</h2>
+        <div class="campo"><span>Abrir o programa sozinho quando o notebook ligar</span>${simNao('iniciarComWindows', o.iniciarComWindows)}
+          ${o.instalado ? '' : '<p class="note">Vale só depois de instalar pelo instalador (.exe).</p>'}</div>
+        <div class="campo"><span>Esconder os avisos do Windows (e-mail, atualizações...) enquanto o programa está aberto</span>${simNao('esconderNotificacoes', o.esconderNotificacoes)}
+          <p class="note">Ao fechar o programa, os avisos voltam como estavam.</p></div>
+      </section>`;
   }
 
   // ---------- ações ----------
@@ -492,7 +615,9 @@
   }
   function avisarImportacao(r) {
     if (!r) return;
-    let t = r.qtd ? `${r.qtd} ${r.qtd === 1 ? 'arquivo adicionado' : 'arquivos adicionados'}.` : 'Nenhum arquivo adicionado.';
+    let t = r.qtd ? `${r.qtd} ${r.qtd === 1 ? 'arquivo adicionado' : 'arquivos adicionados'}.` : r.repetidos ? '' : 'Nenhum arquivo adicionado.';
+    if (r.repetidos) t += ` ${r.repetidos} ${r.repetidos === 1 ? 'já estava' : 'já estavam'} na Biblioteca e não ${r.repetidos === 1 ? 'foi copiado' : 'foram copiados'} de novo${r.naReuniao ? ` (mas ${r.repetidos === 1 ? 'entrou' : 'entraram'} na reunião)` : ''}.`;
+    t = t.trim();
     if (r.ignorados) t += ` ${r.ignorados} não ${r.ignorados === 1 ? 'é' : 'são'} foto, vídeo nem música e ${r.ignorados === 1 ? 'ficou' : 'ficaram'} de fora.`;
     avisar(t);
   }
@@ -547,7 +672,9 @@
       const r = await window.notebook.importarPregacao(S.aba === 'reunioes' ? S.aberta : null);
       if (!r) return;
       if (!r.qtd) { avisar('Nenhuma imagem escolhida. A pregação precisa de imagens (fotos).'); return; }
-      avisar(`Pregação criada com ${r.imagens} imagens. Para mudar o nome, vá na Biblioteca.`);
+      avisar(r.repetida
+        ? `Essa pregação já estava na Biblioteca ("${r.titulo}"). Não foi copiada de novo${S.aba === 'reunioes' && S.aberta ? ', mas está na reunião' : ''}.`
+        : `Pregação criada com ${r.imagens} imagens. Para mudar o nome, vá na Biblioteca.`);
     },
     daBiblioteca: () => { S.escolher = { aba: 'video', sel: new Set() }; },
     escolherAba: v => { S.escolher.aba = v; },
@@ -557,9 +684,20 @@
       avisar(`${S.escolher.sel.size} colocado(s) na reunião.`);
       S.escolher = null;
     },
-    fecharModal: () => { S.escolher = null; S.testar = null; S.verso = null; S.fundo = false; },
+    fecharModal: () => { S.escolher = null; S.testar = null; S.verso = null; S.fundo = false; S.janelas = null; },
+    abrirJanelas: () => { S.janelas = { lista: null }; carregarJanelas(); },
+    recarregarJanelas: () => { S.janelas = { lista: null }; carregarJanelas(); },
+    mostrarJanela: v => {
+      const j = S.janelas && S.janelas.lista && S.janelas.lista.find(x => x.id === v);
+      if (!j) return;
+      enviar({ cmd: 'mostrarJanela', fonteId: j.id, nome: j.nome });
+      S.janelas = null;
+    },
+    sairJanela: () => enviar({ cmd: 'sairJanela' }),
     testar: () => { S.testar = 0; },
-    abrirVerso: () => { S.verso = { test: 'AT', l: null, c: null, de: null, ate: null, versao: null, busca: '' }; setTimeout(() => $('v-busca')?.focus()); },
+    abrirVerso: v => {
+      const pal = v && reuniaoAberta()?.itens.find(i => i.id === v);
+      S.verso = { test: 'AT', l: null, c: null, de: null, ate: null, versao: null, busca: '', palavraId: v || null, nome: pal ? pal.nome || '' : '' }; setTimeout(() => $('v-busca')?.focus()); },
     versoTest: v => { S.verso.test = v; },
     versoLivro: v => {
       S.verso.l = Number(v); S.verso.c = null; S.verso.de = S.verso.ate = null;
@@ -577,10 +715,11 @@
       S.verso.c = null; S.verso.de = S.verso.ate = null;
     },
     versoVersao: v => { S.verso.versao = v || null; },
+    versoNome: v => { S.verso.nome = v === 'Palavra' ? '' : v; },
     versoColocar: () => {
       const x = S.verso;
-      enviar({ cmd: 'adicionarVersiculo', reuniaoId: S.aberta, ref: { l: x.l, c: x.c, v: x.de }, ate: x.ate || x.de, versao: x.versao });
-      avisar('Versículo colocado na Palavra.');
+      enviar({ cmd: 'adicionarVersiculo', reuniaoId: S.aberta, ref: { l: x.l, c: x.c, v: x.de }, ate: x.ate || x.de, versao: x.versao, palavraId: x.palavraId, nome: x.nome || '' });
+      avisar(`Versículo colocado em "${x.nome || 'Palavra'}".`);
       S.verso = null;
     },
     abrirFundo: () => { S.fundo = true; },
@@ -590,7 +729,17 @@
       enviar({ cmd: 'editarReuniao', id: S.aberta, campos: { fundo: v } });
     },
     testarPasso: v => { S.testar += Number(v); },
-    bibAba: v => { S.bibAba = v; S.renomear = null; },
+    bibAba: v => { S.bibAba = v; S.renomear = null; S.catForm = null; },
+    catFiltro: v => { S.catFiltro = v; S.catForm = null; },
+    catNova: () => { S.catForm = { nome: '' }; setTimeout(() => $('cat-nome')?.focus()); },
+    catRenomear: v => { const c = M.categorias.find(x => x.id === v); S.catForm = { id: v, nome: c ? c.nome : '' }; setTimeout(() => $('cat-nome')?.focus()); },
+    catCancelar: () => { S.catForm = null; },
+    catApagar: v => {
+      const c = M.categorias.find(x => x.id === v);
+      if (c && !confirm(`Apagar a categoria "${c.nome}"? As músicas continuam na Biblioteca, só ficam sem categoria.`)) return;
+      enviar({ cmd: 'removerCategoria', id: v });
+      S.catFiltro = 'todas';
+    },
     renomear: v => { S.renomear = v; setTimeout(() => { const i = $('renomear-' + v); if (i) { i.focus(); i.select(); } }); },
     salvarNome: v => salvarNome(v),
     cancelarNome: () => { S.renomear = null; },
@@ -615,6 +764,15 @@
     },
     trocarEspera: () => window.notebook.trocarTelaEspera(),
     trocarTelas: () => window.notebook.trocarTelas(),
+    escolherLogo: async () => {
+      const r = await window.notebook.escolherLogo();
+      if (r && r.erro) avisar(r.erro); else if (r && r.ok) avisar('Logo colocada.');
+    },
+    tirarLogo: async () => { await window.notebook.tirarLogo(); avisar('Logo tirada. Voltou a cruz do Púlpito.'); },
+    opcao: async (nome, el) => {
+      await window.notebook.mudarOpcao(nome, el.dataset.sim === '1');
+      carregarOpcoes();
+    },
   };
 
   function salvarNome(v) {
@@ -636,9 +794,28 @@
     desenhar();
   });
 
+  // Categoria escolhida numa música
+  document.addEventListener('change', ev => {
+    const sel = ev.target.closest && ev.target.closest('select[data-categoria]');
+    if (sel) enviar({ cmd: 'definirCategoria', id: sel.dataset.categoria, categoria: sel.value || null });
+  });
+
   document.addEventListener('submit', async ev => {
     ev.preventDefault();
     const f = ev.target;
+    if (f.id === 'form-categoria') {
+      const nome = $('cat-nome').value.trim();
+      if (!nome) { avisar('Escreva o nome da categoria.'); return; }
+      if (S.catForm.id) enviar({ cmd: 'renomearCategoria', id: S.catForm.id, nome });
+      else {
+        const c = await pedir({ cmd: 'criarCategoria', nome });
+        if (c) S.catFiltro = c.id;  // já mostra a categoria nova, pronta para receber músicas
+      }
+      S.catForm = null;
+      document.activeElement?.blur();
+      desenhar();
+      return;
+    }
     if (f.id === 'form-reuniao') {
       lerForm();
       const { modo, id, copiarDe, pastorId, data, hora, nome } = S.form;

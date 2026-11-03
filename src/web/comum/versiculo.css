@@ -1,5 +1,5 @@
 /* Versículo na TV (e nas miniaturas). O tamanho da letra é calculado pelo versiculo.js. */
-.vs { position: relative; width: 100%; height: 100%; overflow: hidden; color: #fff; font-family: var(--font-ui); }
+.vs { position: relative; width: 100%; height: 100%; overflow: hidden; color: #fff; font-family: "Atkinson Hyperlegible", var(--font-ui); }
 .vs-caixa { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: .6em; text-align: center; box-sizing: border-box; }
 .vs-texto { margin: 0; font-weight: 700; line-height: 1.3; text-wrap: balance; overflow-wrap: break-word; max-width: 100%; text-shadow: 0 .05em .3em rgba(0, 0, 0, .55); }
 .vs-ref { font-weight: 700; letter-spacing: .04em; opacity: .92; text-shadow: 0 .05em .3em rgba(0, 0, 0, .6); }

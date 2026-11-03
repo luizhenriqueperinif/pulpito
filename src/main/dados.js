@@ -18,6 +18,26 @@ const VERSOES = ['ACF', 'NVI'];
 const FUNDOS_PRONTOS = ['ceu', 'amanhecer', 'trigo', 'noite', 'oceano', 'pergaminho', 'vinho', 'floresta'];
 const FUNDO_PADRAO = 'ceu';
 
+/**
+ * "Impressão digital" do arquivo: tamanho + começo + fim do conteúdo.
+ * O mesmo arquivo com outro nome (reenviado pelo WhatsApp) dá a mesma marca.
+ * Lê só 2 MB, então é rápido até para vídeo grande.
+ */
+const PEDACO = 1024 * 1024;
+function marcaDoArquivo(caminho) {
+  const tam = fs.statSync(caminho).size;
+  const h = crypto.createHash('sha1').update(String(tam));
+  const fd = fs.openSync(caminho, 'r');
+  try {
+    const ler = (pos, n) => { const b = Buffer.alloc(n); const lidos = fs.readSync(fd, b, 0, n, pos); h.update(b.subarray(0, lidos)); };
+    ler(0, Math.min(PEDACO, tam));
+    if (tam > PEDACO) ler(Math.max(PEDACO, tam - PEDACO), Math.min(PEDACO, tam - PEDACO));
+  } finally { fs.closeSync(fd); }
+  return h.digest('hex');
+}
+/** Marca da pregação: as marcas das imagens, na ordem. */
+const marcaDaPregacao = marcas => crypto.createHash('sha1').update(marcas.join('|')).digest('hex');
+
 function tipoDoArquivo(nome) {
   const ext = path.extname(nome).slice(1).toLowerCase();
   if (EXT_IMAGEM.includes(ext)) return 'imagem';
@@ -133,32 +153,70 @@ class Dados {
   get biblioteca() { return this.d.biblioteca; }
   arquivoDaBiblioteca(bid) { return this.d.biblioteca.find(b => b.id === bid); }
 
-  /** Copia os arquivos para a Biblioteca, na ordem do nome (a ordem em que o WhatsApp salvou). */
+  /**
+   * O que já está na Biblioteca, pela marca do conteúdo ("tipo|marca" → arquivo).
+   * Arquivos de antes desta versão ganham a marca aqui, uma vez só.
+   */
+  _porMarca() {
+    let calculou = false;
+    const mapa = new Map();
+    for (const b of this.d.biblioteca) {
+      if (!b.marca) {
+        try {
+          b.marca = b.tipo === 'pregacao'
+            ? marcaDaPregacao(b.arquivos.map(a => marcaDoArquivo(path.join(this.pastaMidia, a))))
+            : marcaDoArquivo(path.join(this.pastaMidia, b.arquivo));
+          calculou = true;
+        } catch { continue; } // arquivo sumiu da pasta: não dá para comparar
+      }
+      mapa.set(b.tipo + '|' + b.marca, b);
+    }
+    if (calculou) this.salvar();
+    return mapa;
+  }
+
+  /**
+   * Copia os arquivos para a Biblioteca, na ordem do nome (a ordem em que o WhatsApp salvou).
+   * Arquivo que já está na Biblioteca (mesmo conteúdo, mesmo com outro nome) não é copiado de novo:
+   * volta em "repetidos" o que já estava lá.
+   */
   importarArquivos(caminhos, { comoFundo = false } = {}) {
     // Fundo de versículo só pode ser imagem.
     const tipo = c => (comoFundo ? (tipoDoArquivo(c) === 'imagem' ? 'fundo' : null) : tipoDoArquivo(c));
     const aceitos = caminhos
       .filter(c => tipo(c))
       .sort((a, b) => path.basename(a).localeCompare(path.basename(b), 'pt-BR', { numeric: true }));
-    const novos = aceitos.map(c => {
+    const jaTem = this._porMarca();
+    const novos = [], repetidos = [];
+    for (const c of aceitos) {
+      const marca = marcaDoArquivo(c);
+      const chave = tipo(c) + '|' + marca;
+      const existente = jaTem.get(chave);
+      if (existente) { if (!repetidos.includes(existente)) repetidos.push(existente); continue; }
       const nome = id() + path.extname(c).toLowerCase();
       fs.copyFileSync(c, path.join(this.pastaMidia, nome));
-      return { id: id(), tipo: tipo(c), titulo: tituloDoArquivo(c), arquivo: nome, criadoEm: this.hoje() };
-    });
+      const b = { id: id(), tipo: tipo(c), titulo: tituloDoArquivo(c), arquivo: nome, criadoEm: this.hoje(), marca };
+      novos.push(b);
+      jaTem.set(chave, b); // o mesmo arquivo duas vezes na mesma escolha também não duplica
+    }
     this.d.biblioteca.push(...novos);
     this.salvar();
-    return { novos, ignorados: caminhos.length - aceitos.length };
+    return { novos, repetidos, ignorados: caminhos.length - aceitos.length };
   }
 
   /**
    * Pregação: várias imagens (as que o bispo mandou) guardadas juntas, na ordem do nome.
    * Fica na Biblioteca como uma coisa só.
+   * manterOrdem: usa a ordem recebida (vindas do celular, na ordem em que o pastor marcou).
    */
-  criarPregacao(caminhos, { titulo } = {}) {
-    const imagens = caminhos
-      .filter(c => tipoDoArquivo(c) === 'imagem')
-      .sort((a, b) => path.basename(a).localeCompare(path.basename(b), 'pt-BR', { numeric: true }));
+  criarPregacao(caminhos, { titulo, manterOrdem = false } = {}) {
+    const imagens = caminhos.filter(c => tipoDoArquivo(c) === 'imagem');
+    if (!manterOrdem) imagens.sort((a, b) => path.basename(a).localeCompare(path.basename(b), 'pt-BR', { numeric: true }));
     if (!imagens.length) return null;
+    // A mesma pregação (mesmas imagens, na mesma ordem) já está na Biblioteca: usa a que já tem.
+    const marca = marcaDaPregacao(imagens.map(marcaDoArquivo));
+    const existente = this._porMarca().get('pregacao|' + marca);
+    if (existente) return { pregacao: existente, ignorados: caminhos.length - imagens.length, repetida: true };
     const arquivos = imagens.map(c => {
       const nome = id() + path.extname(c).toLowerCase();
       fs.copyFileSync(c, path.join(this.pastaMidia, nome));
@@ -172,10 +230,49 @@ class Dados {
       arquivo: arquivos[0],
       arquivos,
       criadoEm: hoje,
+      marca,
     };
     this.d.biblioteca.push(b);
     this.salvar();
     return { pregacao: b, ignorados: caminhos.length - imagens.length };
+  }
+
+  // ---------- Categorias de música ("Oração forte", "Fundo de busca"...) ----------
+
+  get categoriasMusica() { return this.d.config.categoriasMusica || (this.d.config.categoriasMusica = []); }
+
+  criarCategoria(nome) {
+    nome = String(nome || '').replace(/\s+/g, ' ').trim().slice(0, 40);
+    if (!nome) return null;
+    const igual = this.categoriasMusica.find(c => c.nome.toLowerCase() === nome.toLowerCase());
+    if (igual) return igual;
+    const c = { id: id(), nome };
+    this.categoriasMusica.push(c);
+    this.salvar();
+    return c;
+  }
+
+  renomearCategoria(cid, nome) {
+    const c = this.categoriasMusica.find(x => x.id === cid);
+    nome = String(nome || '').replace(/\s+/g, ' ').trim().slice(0, 40);
+    if (!c || !nome) return;
+    c.nome = nome;
+    this.salvar();
+  }
+
+  /** Apaga só a categoria: as músicas continuam na Biblioteca, sem categoria. */
+  removerCategoria(cid) {
+    this.d.config.categoriasMusica = this.categoriasMusica.filter(c => c.id !== cid);
+    for (const b of this.d.biblioteca) if (b.categoria === cid) delete b.categoria;
+    this.salvar();
+  }
+
+  /** Põe a música numa categoria (ou tira, com cid vazio). */
+  definirCategoria(bid, cid) {
+    const b = this.arquivoDaBiblioteca(bid);
+    if (!b || b.tipo !== 'musica') return;
+    if (cid && this.categoriasMusica.some(c => c.id === cid)) b.categoria = cid; else delete b.categoria;
+    this.salvar();
   }
 
   renomearArquivo(bid, titulo) {
@@ -270,16 +367,18 @@ class Dados {
   }
 
   /**
-   * Versículo preparado: entra na Palavra da reunião (um item só, com as passagens em ordem).
-   * Se a reunião ainda não tem Palavra, ela é criada no fim.
-   * @param {{ ref: {l,c,v}, ate?: number, versao?: 'ACF'|'NVI'|null }} v
+   * Versículo preparado. A reunião pode ter várias Palavras (a do dízimo, a da família...),
+   * cada uma num lugar da reunião. Com palavraId entra nessa Palavra; sem, vira uma Palavra nova no fim.
+   * nome: o que aparece no cartão ("Palavra do dízimo"). Vazio = "Palavra".
+   * @param {{ ref: {l,c,v}, ate?: number, versao?: 'ACF'|'NVI'|null, palavraId?: string, nome?: string }} v
    * @returns a passagem criada
    */
-  adicionarVersiculo(rid, { ref, ate, versao }) {
+  adicionarVersiculo(rid, { ref, ate, versao, palavraId, nome }) {
     const r = this.reuniao(rid);
     if (!r || !ref) return null;
-    let palavra = r.itens.find(i => i.tipo === 'palavra');
+    let palavra = palavraId && r.itens.find(i => i.id === palavraId && i.tipo === 'palavra');
     if (!palavra) { palavra = { id: id(), tipo: 'palavra', passagens: [] }; r.itens.push(palavra); }
+    if (nome !== undefined) palavra.nome = nomeDaPalavra(nome);
     const p = {
       id: id(),
       ref: { l: Number(ref.l), c: Number(ref.c), v: Number(ref.v) },
@@ -291,10 +390,21 @@ class Dados {
     return p;
   }
 
-  _palavra(rid) { return this.reuniao(rid)?.itens.find(i => i.tipo === 'palavra'); }
+  /** Muda o nome do cartão da Palavra ("Palavra do dízimo"). */
+  renomearPalavra(rid, itemId, nome) {
+    const pal = this.reuniao(rid)?.itens.find(i => i.id === itemId && i.tipo === 'palavra');
+    if (!pal) return;
+    pal.nome = nomeDaPalavra(nome);
+    this.salvar();
+  }
+
+  /** A Palavra que tem essa passagem. */
+  _palavra(rid, passagemId) {
+    return this.reuniao(rid)?.itens.find(i => i.tipo === 'palavra' && i.passagens.some(p => p.id === passagemId));
+  }
 
   moverPassagem(rid, passagemId, delta) {
-    const pal = this._palavra(rid);
+    const pal = this._palavra(rid, passagemId);
     if (!pal) return;
     const i = pal.passagens.findIndex(p => p.id === passagemId);
     const j = i + delta;
@@ -307,7 +417,7 @@ class Dados {
   /** Tira uma passagem. Se era a última, a Palavra sai da reunião. */
   removerPassagem(rid, passagemId) {
     const r = this.reuniao(rid);
-    const pal = this._palavra(rid);
+    const pal = this._palavra(rid, passagemId);
     if (!pal) return;
     pal.passagens = pal.passagens.filter(p => p.id !== passagemId);
     if (!pal.passagens.length) r.itens = r.itens.filter(i => i !== pal);
@@ -320,10 +430,12 @@ class Dados {
     this.salvar();
   }
 
-  adicionarItens(rid, bibliotecaIds) {
+  /** semRepetir: não coloca de novo o que a reunião já tem (usado ao importar arquivos repetidos). */
+  adicionarItens(rid, bibliotecaIds, { semRepetir = false } = {}) {
     const r = this.reuniao(rid);
     if (!r) return;
     for (const bid of bibliotecaIds) {
+      if (semRepetir && r.itens.some(i => i.bibliotecaId === bid)) continue;
       if (this.arquivoDaBiblioteca(bid)) r.itens.push({ id: id(), bibliotecaId: bid });
     }
     this.salvar();
@@ -360,7 +472,7 @@ class Dados {
         const titulo = `${biblia.nomeLivro(l)} ${c}:${v}${p.ate > v ? '-' + p.ate : ''}`;
         return { id: p.id, titulo, ref: { ...p.ref }, ate: p.ate, versao: p.versao || null };
       });
-      return { id: it.id, tipo: 'palavra', titulo: 'Palavra', passagens };
+      return { id: it.id, tipo: 'palavra', titulo: it.nome || 'Palavra', nome: it.nome || null, passagens };
     }
     const b = this.arquivoDaBiblioteca(it.bibliotecaId);
     if (!b) return null;
@@ -414,6 +526,11 @@ class Dados {
     this.salvar();
     if (antiga) fs.rmSync(path.join(this.pastaMidia, antiga), { force: true });
   }
+}
+
+/** Nome do cartão da Palavra: sem espaços sobrando, curto; vazio = sem nome (aparece "Palavra"). */
+function nomeDaPalavra(nome) {
+  return String(nome || '').replace(/\s+/g, ' ').trim().slice(0, 40) || null;
 }
 
 /**

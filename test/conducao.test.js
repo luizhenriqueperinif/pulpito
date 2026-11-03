@@ -249,3 +249,23 @@ test('pregação começa na primeira imagem e as setas param nas pontas', () => 
   const outra = run({ cmd: 'escolherReuniao', id: 'r1' }, { cmd: 'mostrar', itemId: 'img' });
   assert.equal(aplicar(outra, { cmd: 'passoSlide', delta: 1 }, ctx), outra, 'sem pregação na TV não faz nada');
 });
+
+test('janela do notebook na TV: entra, para a música e volta para o que estava', () => {
+  const R = { cmd: 'escolherReuniao', id: 'r1' };
+  assert.equal(run({ cmd: 'mostrarJanela', fonteId: 'window:1:0', nome: 'Telegram' }).tv.tipo, 'janela', 'funciona sem reunião começada');
+  assert.equal(run({ cmd: 'mostrarJanela', fonteId: 'window:1:0' }, { cmd: 'sairJanela' }).tv.tipo, 'espera');
+  let e = run(R, { cmd: 'mostrar', itemId: 'img' }, { cmd: 'tocarMusica', bibliotecaId: 'b-hino' },
+    { cmd: 'mostrarJanela', fonteId: 'window:1:0', nome: 'Telegram' });
+  assert.deepEqual(e.tv, { tipo: 'janela', fonteId: 'window:1:0', nome: 'Telegram' });
+  assert.equal(e.audio, null);
+  // trocar de janela não esquece o que estava antes
+  e = aplicar(e, { cmd: 'mostrarJanela', fonteId: 'window:2:0', nome: 'Univervideo' }, ctx);
+  e = aplicar(e, { cmd: 'sairJanela' }, ctx);
+  assert.deepEqual(e.tv, { tipo: 'item', itemId: 'img' });
+  // tocar num cartão também sai da janela
+  e = run(R, { cmd: 'mostrarJanela', fonteId: 'window:1:0' }, { cmd: 'mostrar', itemId: 'vid' });
+  assert.equal(e.tv.itemId, 'vid');
+  // apagar e acender a TV volta para a janela
+  e = run(R, { cmd: 'mostrarJanela', fonteId: 'window:1:0' }, { cmd: 'apagar' }, { cmd: 'apagar' });
+  assert.equal(e.tv.tipo, 'janela');
+});

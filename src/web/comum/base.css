@@ -1,50 +1,78 @@
-@font-face { font-family: "Atkinson Hyperlegible"; font-weight: 400; font-display: swap; src: url("/fontes/atkinson-hyperlegible-latin-400-normal.woff2") format("woff2"); }
-@font-face { font-family: "Atkinson Hyperlegible"; font-weight: 700; font-display: swap; src: url("/fontes/atkinson-hyperlegible-latin-700-normal.woff2") format("woff2"); }
+/* Letras (vêm junto com o programa: funcionam sem internet) */
+@font-face { font-family: "Atkinson Hyperlegible"; font-weight: 400; font-display: swap; src: url("/fontes/atkinson-hyperlegible/files/atkinson-hyperlegible-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "Atkinson Hyperlegible"; font-weight: 700; font-display: swap; src: url("/fontes/atkinson-hyperlegible/files/atkinson-hyperlegible-latin-700-normal.woff2") format("woff2"); }
+@font-face { font-family: "Plus Jakarta Sans"; font-weight: 500; font-display: swap; src: url("/fontes/plus-jakarta-sans/files/plus-jakarta-sans-latin-500-normal.woff2") format("woff2"); }
+@font-face { font-family: "Plus Jakarta Sans"; font-weight: 600; font-display: swap; src: url("/fontes/plus-jakarta-sans/files/plus-jakarta-sans-latin-600-normal.woff2") format("woff2"); }
+@font-face { font-family: "Plus Jakarta Sans"; font-weight: 700; font-display: swap; src: url("/fontes/plus-jakarta-sans/files/plus-jakarta-sans-latin-700-normal.woff2") format("woff2"); }
+@font-face { font-family: "Plus Jakarta Sans"; font-weight: 800; font-display: swap; src: url("/fontes/plus-jakarta-sans/files/plus-jakarta-sans-latin-800-normal.woff2") format("woff2"); }
 
+/*
+ * Tema Universal: vermelho, branco e grafite.
+ * Claro = "Universal Claro"; escuro = "Universal Noite". Segue o modo claro/escuro do aparelho.
+ * O vermelho é a cor principal; por isso "apagar" e a lixeira são laranja (não confundir).
+ */
 :root {
-  --bg: #e9eef4;
+  --bg: #f4f5f7;
   --surface: #ffffff;
-  --surface-2: #f3f6fa;
-  --ink: #132030;
-  --muted: #4b596a;
-  --line: #c3cedb;
-  --accent: #1f4d9c;
+  --surface-2: #eef0f3;
+  --ink: #15171c;
+  --muted: #5b616d;
+  --line: #dfe2e8;
+  --accent: #d70a10;
+  --accent-soft: #fde7e8;
   --on-accent: #ffffff;
-  --live: #17803f;
-  --live-bg: #def3e6;
+  --brand: #fe0000;
+  --live: #12805c;
+  --live-bg: #dcf5ea;
   --warn: #8a5a00;
   --warn-bg: #fff1cc;
-  --danger: #a8231b;
-  --danger-bg: #fbe4e1;
-  --font-ui: "Atkinson Hyperlegible", "Segoe UI", Roboto, Arial, sans-serif;
-  --radius: 14px;
+  --danger: #c2410c;
+  --danger-bg: #ffedd5;
+  /* menu lateral do notebook: sempre grafite */
+  --side: #1b1d22;
+  --side-ink: #ffffff;
+  --side-muted: #a7abb4;
+  --side-hover: rgba(255, 255, 255, .07);
+  --shadow: 0 1px 2px rgba(21, 23, 28, .06), 0 8px 24px rgba(21, 23, 28, .07);
+  --font-ui: "Plus Jakarta Sans", "Atkinson Hyperlegible", "Segoe UI", Roboto, Arial, sans-serif;
+  --radius: 16px;
+  --radius-sm: 12px;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0d131a; --surface: #17212d; --surface-2: #1d2936; --ink: #eef3f8; --muted: #a9b6c4;
-    --line: #2f3e4f; --accent: #8db4ff; --on-accent: #0b1424; --live: #4cc77c; --live-bg: #12321f;
-    --warn: #ffd27a; --warn-bg: #3a2c0c; --danger: #ff8f84; --danger-bg: #3a1714;
+    --bg: #0e0f12; --surface: #18191d; --surface-2: #212228; --ink: #f4f5f7; --muted: #a9adb6;
+    --line: #2e3037; --accent: #e3141b; --accent-soft: rgba(227, 20, 27, .16); --on-accent: #ffffff;
+    --live: #34d07f; --live-bg: rgba(52, 208, 127, .14);
+    --warn: #ffd27a; --warn-bg: rgba(255, 210, 122, .12); --danger: #fb923c; --danger-bg: rgba(251, 146, 60, .13);
+    --side: #08090b; --side-muted: #a4a8b1;
+    --shadow: 0 0 0 1px rgba(255, 255, 255, .03), 0 12px 32px rgba(0, 0, 0, .45);
     color-scheme: dark;
   }
 }
 
 * { box-sizing: border-box; }
 html, body { margin: 0; }
-body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); font-size: 18px; line-height: 1.35; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); font-size: 18px; line-height: 1.35; font-weight: 500; }
 button { font: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
 button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 button:disabled { opacity: .45; cursor: default; }
 [hidden] { display: none !important; }
 
 .btn {
-  min-height: 64px; border-radius: var(--radius); border: 2px solid var(--line);
-  background: var(--surface); padding: 10px 14px; font-size: 19px; font-weight: 700;
+  min-height: 64px; border-radius: var(--radius-sm); border: 1.5px solid var(--line);
+  background: var(--surface); padding: 10px 16px; font-size: 19px; font-weight: 700;
   display: inline-flex; align-items: center; justify-content: center; gap: 8px; text-align: center;
+  transition: background-color .15s, border-color .15s, box-shadow .15s;
 }
-.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
-.btn.danger { border-color: var(--danger); color: var(--danger); background: var(--danger-bg); }
+.btn:not(:disabled):hover { border-color: color-mix(in srgb, var(--ink) 30%, var(--line)); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); box-shadow: 0 6px 18px color-mix(in srgb, var(--accent) 28%, transparent); }
+.btn.primary:not(:disabled):hover { border-color: var(--accent); filter: brightness(1.06); }
+.btn.danger { border-color: transparent; color: var(--danger); background: var(--danger-bg); }
 .btn.live { border-color: var(--live); color: var(--live); background: var(--live-bg); }
 .btn.huge { min-height: 96px; font-size: 26px; }
-.eyebrow { font-size: 14px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.eyebrow { font-size: 13px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
 .note { color: var(--muted); font-size: 15px; margin: 0; }
+
+/* Marca: logo da igreja (se tiver) ou a cruz do Púlpito */
+.marca-logo { width: 40px; height: 40px; flex: none; display: block; object-fit: contain; }

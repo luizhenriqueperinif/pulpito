@@ -13,4 +13,9 @@ contextBridge.exposeInMainWorld('notebook', {
   trocarTelaEspera: () => ipcRenderer.invoke('trocar-tela-espera'),
   atualizarEndereco: () => ipcRenderer.invoke('atualizar-endereco'),
   trocarTelas: () => ipcRenderer.invoke('trocar-telas'),
+  opcoes: () => ipcRenderer.invoke('opcoes'),
+  escolherLogo: () => ipcRenderer.invoke('escolher-logo'),
+  tirarLogo: () => ipcRenderer.invoke('tirar-logo'),
+  mudarOpcao: (nome, valor) => ipcRenderer.invoke('mudar-opcao', { nome, valor }),
+  listarJanelas: () => ipcRenderer.invoke('listar-janelas'),
 });
