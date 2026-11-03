@@ -1,5 +1,6 @@
 // Painel do Notebook: preparar as Reuniões, cuidar da Biblioteca, dos Pastores e das telas.
 (function () {
+  const I = window.Icone;
   const $ = id => document.getElementById(id);
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const TIPO = { imagem: 'Imagem', video: 'Vídeo', palavra: 'Palavra', fundo: 'Fundo', musica: 'Música · toca sem mudar a TV', pregacao: 'Pregação' };
@@ -87,8 +88,8 @@
     // Botão de mostrar uma janela do notebook na TV (Telegram, Univervideo...): sempre à mão.
     const naTv = M.estado && M.estado.tv.tipo === 'janela';
     $('janela-tv').innerHTML = naTv ? `<div class="janela-viva"><small>Na TV agora</small><b>${esc(M.estado.tv.nome)}</b></div>
-          <button class="btn primary bloco" data-a="sairJanela">↩ Voltar para o Púlpito</button>`
-      : '<button class="btn bloco lado-btn" data-a="abrirJanelas">📺 Mostrar uma janela na TV</button>';
+          <button class="btn primary bloco" data-a="sairJanela">${I('voltar')} Voltar para o Púlpito</button>`
+      : `<button class="btn bloco lado-btn" data-a="abrirJanelas">${I('tv')} Mostrar uma janela na TV</button>`;
     // Logo da igreja (ou a cruz do Púlpito)
     if (i.logo !== ultimaLogo) {
       ultimaLogo = i.logo;
@@ -123,7 +124,7 @@
     else if (S.aba === 'biblioteca') html = biblioteca();
     else if (S.aba === 'config') html = configuracoes();
     $('conteudo').innerHTML = html;
-    $('modal').innerHTML = S.janelas ? escolherJanela() : S.escolher ? janelaEscolher() : S.testar != null ? janelaTestar() : S.verso ? janelaVerso() : S.fundo ? janelaFundo() : '';
+    $('modal').innerHTML = S.espera ? janelaEspera() : S.janelas ? escolherJanela() : S.escolher ? janelaEscolher() : S.testar != null ? janelaTestar() : S.verso ? janelaVerso() : S.fundo ? janelaFundo() : '';
     window.Versiculo.ajustar(document.body);
     const v = document.querySelector('#modal video'); if (v) v.volume = 0.5;
   }
@@ -147,8 +148,8 @@
           ${M.estado.reuniaoId === r.id ? ' · <span class="ao-vivo">acontecendo agora</span>' : ''}</div></div>
         <div class="acoes">
           <button class="btn primary sm" data-a="abrir" data-v="${r.id}">Abrir</button>
-          <button class="btn sm" data-a="copiar" data-v="${r.id}" title="Nova reunião com as mesmas músicas e versículos">📋 Copiar</button>
-          <button class="btn danger sm" data-a="apagarReuniao" data-v="${r.id}">🗑</button>
+          <button class="btn sm" data-a="copiar" data-v="${r.id}" title="Nova reunião com as mesmas músicas e versículos">${I('copiar')} Copiar</button>
+          <button class="btn danger sm" data-a="apagarReuniao" data-v="${r.id}" aria-label="Apagar reunião">${I('lixo')}</button>
         </div></div>`;
     const grupo = (titulo, itens, vazio) => `<div class="grupo"><div class="eyebrow">${titulo}</div>
         ${itens.length ? itens.map(linha).join('') : `<p class="note">${vazio}</p>`}</div>`;
@@ -202,12 +203,14 @@
   // ---------- Reuniões: montar uma reunião ----------
   function fundoCss(f) { return window.Versiculo.estiloFundo(f, midia).bg; }
   function miniatura(it) {
-    if (it.tipo === 'palavra') return `<div class="miniatura" style='background:${fundoCss(reuniaoAberta()?.fundo)}'>📖</div>`;
+    if (it.tipo === 'palavra') return `<div class="miniatura" style='background:${fundoCss(reuniaoAberta()?.fundo)}'>${I('palavra')}</div>`;
     if (it.tipo === 'fundo') return `<div class="miniatura" style='background:${fundoCss({ arquivo: it.arquivo })}'></div>`;
     if (it.tipo === 'imagem') return `<div class="miniatura"><img src="${midia(it.arquivo)}" alt="" loading="lazy" draggable="false"></div>`;
-    if (it.tipo === 'musica') return `<div class="miniatura musica">🎵</div>`;
+    if (it.tipo === 'musica') return `<div class="miniatura musica">${I('musica')}</div>`;
     if (it.tipo === 'pregacao') return `<div class="miniatura"><img src="${midia(it.arquivo)}" alt="" loading="lazy" draggable="false"><span class="qtd">${it.arquivos.length}</span></div>`;
-    if (it.tipo === 'video') return `<div class="miniatura"><video src="${midia(it.arquivo)}#t=1" preload="metadata" muted draggable="false"></video></div>`;
+    if (it.tipo === 'video') return it.capa
+      ? `<div class="miniatura"><img src="${midia(it.capa)}" alt="" loading="lazy" draggable="false"><span class="play" aria-hidden="true">${I('play')}</span></div>`
+      : `<div class="miniatura"><video src="${midia(it.arquivo)}#t=1" preload="metadata" muted draggable="false"></video><span class="play" aria-hidden="true">${I('play')}</span></div>`;
     return `<div class="miniatura">•</div>`;
   }
 
@@ -217,63 +220,87 @@
         <span class="pn">${i + 1}.</span>
         <div><div class="t">${esc(p.titulo)}</div><div class="d">${p.ate > p.ref.v ? `${p.ate - p.ref.v + 1} versículos, um por tela` : '1 versículo'} · Bíblia ${p.versao ? p.versao : `${r.versao} (do pastor)`}</div></div>
         <div class="acoes">
-          <button class="btn sm" data-a="moverPassagem" data-v="${p.id}" data-d="-1" ${i === 0 ? 'disabled' : ''} aria-label="Subir">↑</button>
-          <button class="btn sm" data-a="moverPassagem" data-v="${p.id}" data-d="1" ${i === n - 1 ? 'disabled' : ''} aria-label="Descer">↓</button>
-          <button class="btn sm danger" data-a="tirarPassagem" data-v="${p.id}" aria-label="Tirar versículo">🗑</button>
+          <button class="btn sm" data-a="moverPassagem" data-v="${p.id}" data-d="-1" ${i === 0 ? 'disabled' : ''} aria-label="Subir">${I('subir')}</button>
+          <button class="btn sm" data-a="moverPassagem" data-v="${p.id}" data-d="1" ${i === n - 1 ? 'disabled' : ''} aria-label="Descer">${I('descer')}</button>
+          <button class="btn sm danger" data-a="tirarPassagem" data-v="${p.id}" aria-label="Tirar versículo">${I('lixo')}</button>
         </div></div>`).join('')}
-      <div><button class="btn sm" data-a="abrirVerso" data-v="${it.id}">📖 + Outro versículo nesta Palavra</button></div></div>`;
+      <div><button class="btn sm" data-a="abrirVerso" data-v="${it.id}">${I('mais')} Outro versículo nesta Palavra</button></div></div>`;
   }
 
   function editor() {
     const r = M.reunioesCompletas.find(x => x.id === S.aberta);
     const naTv = M.estado.reuniaoId === r.id && M.estado.tv.tipo === 'item' ? M.estado.tv.itemId : null;
     const itens = r.itens.map((it, i) => `<div class="item ${naTv === it.id ? 'na-tv' : ''}" draggable="true" data-item="${it.id}" title="Arraste para mudar a ordem">
-        <span class="n"><span class="alca" aria-hidden="true">⠿</span><span class="num">${i + 1}</span></span>${miniatura(it)}
+        <span class="n"><span class="alca" aria-hidden="true">${I('arrastar')}</span><span class="num">${i + 1}</span></span>${miniatura(it)}
         <div><div class="t">${it.tipo === 'palavra'
-          ? `📖 <input class="nome-palavra" data-palavra="${it.id}" value="${esc(it.nome || '')}" placeholder="Palavra" maxlength="40" aria-label="Nome do cartão" title="Clique para mudar o nome do cartão">`
+          ? `<input class="nome-palavra" data-palavra="${it.id}" value="${esc(it.nome || '')}" placeholder="Palavra" maxlength="40" aria-label="Nome do cartão" title="Clique para mudar o nome do cartão">`
           : esc(it.titulo)}</div><div class="d">${it.tipo === 'palavra'
-          ? `${it.passagens.length} ${it.passagens.length === 1 ? 'passagem' : 'passagens'} · no celular é um cartão, com as setas ◀ ▶`
-          : it.tipo === 'pregacao' ? `Pregação · ${it.arquivos.length} ${it.arquivos.length === 1 ? 'imagem' : 'imagens'} · no celular passa com ◀ ▶`
+          ? `${it.passagens.length} ${it.passagens.length === 1 ? 'passagem' : 'passagens'} · no celular é um cartão, com as setas`
+          : it.tipo === 'pregacao' ? `Pregação · ${it.arquivos.length} ${it.arquivos.length === 1 ? 'imagem' : 'imagens'} · no celular passa com as setas`
           : TIPO[it.tipo] || it.tipo}${naTv === it.id ? ' · <span class="ao-vivo">na TV agora</span>' : ''}</div></div>
         <div class="acoes">
-          <button class="btn" data-a="mover" data-v="${it.id}" data-d="-1" ${i === 0 ? 'disabled' : ''} aria-label="Subir">↑</button>
-          <button class="btn" data-a="mover" data-v="${it.id}" data-d="1" ${i === r.itens.length - 1 ? 'disabled' : ''} aria-label="Descer">↓</button>
-          <button class="btn danger" data-a="tirar" data-v="${it.id}" aria-label="Tirar da reunião">🗑</button>
+          <button class="btn" data-a="mover" data-v="${it.id}" data-d="-1" ${i === 0 ? 'disabled' : ''} aria-label="Subir">${I('subir')}</button>
+          <button class="btn" data-a="mover" data-v="${it.id}" data-d="1" ${i === r.itens.length - 1 ? 'disabled' : ''} aria-label="Descer">${I('descer')}</button>
+          <button class="btn danger" data-a="tirar" data-v="${it.id}" aria-label="Tirar da reunião">${I('lixo')}</button>
         </div>${it.tipo === 'palavra' ? linhasPassagens(it, r) : ''}</div>`).join('');
 
     return `<div class="pagina">
-      <div><button class="btn sm" data-a="fechar">◀ Todas as reuniões</button></div>
+      <div><button class="btn sm" data-a="fechar">${I('esq')} Todas as reuniões</button></div>
       ${S.form ? formReuniao() : `<div class="cabeca">
         <div class="pilha" style="gap:4px">
           <h1>${esc(tituloReuniao(r))}</h1>
           <div class="note" style="font-size:18px; text-transform:capitalize">${esc(diaSemana(r.data))}, ${ddmmaaaa(r.data)} · ${esc(r.hora)} · ${r.pastor ? esc(r.pastor) : 'sem pastor'}</div>
         </div>
         <div class="acoes">
-          <button class="btn" data-a="editarDados">✏️ Mudar dia, hora ou pastor</button>
+          <button class="btn" data-a="editarDados">${I('editar')} Mudar dia, hora ou pastor</button>
           <button class="btn" data-a="abrirFundo"><span class="bolinha" style='background:${fundoCss(r.fundo)}'></span> Fundo dos versículos</button>
-          <button class="btn primary" data-a="testar" ${r.itens.length ? '' : 'disabled'}>▶ Testar</button>
+          <button class="btn" data-a="abrirEspera"><span class="bolinha" style='background:${esperaCss(r.telaEspera)}'></span> Tela de espera${r.telaEsperaId ? '' : ' (padrão)'}</button>
+          <button class="btn" data-a="testar" ${r.itens.length ? '' : 'disabled'}>${I('play')} Testar</button>
+          <button class="btn primary" data-a="passarAqui" data-v="${r.id}" title="Começa a reunião e abre o controle aqui no notebook">${I('tv')} ${M.estado.reuniaoId === r.id ? 'Passar na TV por aqui' : M.estado.reuniaoId ? 'Trocar a TV para esta reunião' : 'Passar na TV por aqui'}</button>
         </div></div>`}
-      ${r.itens.length ? `<div class="itens">${itens}</div>` : `<div class="vazio"><div class="grande">📭</div><div>Esta reunião ainda está vazia.</div></div>`}
+      ${r.itens.length ? `<div class="itens">${itens}</div>` : `<div class="vazio"><div class="grande">${I('vazio')}</div><div>Esta reunião ainda está vazia.</div></div>`}
       <div class="adicionar">
+        <h2 class="adicionar-tit">Colocar na reunião</h2>
         <div class="acoes">
-          <button class="btn primary huge" data-a="importar">+ Fotos, vídeos e músicas</button>
-          <button class="btn primary huge" data-a="novaPregacao">📑 + Pregação</button>
-          <button class="btn primary huge" data-a="abrirVerso">📖 + Versículo</button>
-          <button class="btn huge" data-a="daBiblioteca">🗂️ Da Biblioteca</button>
+          <button class="btn primary huge" data-a="daBiblioteca">${I('biblioteca')} Da Biblioteca</button>
+          <button class="btn primary huge" data-a="abrirVerso">${I('palavra')} Versículo</button>
         </div>
-        <p class="note">Ou arraste os arquivos para esta janela. Eles entram no fim da lista, na ordem do WhatsApp.
-          Para mudar a ordem, arraste um item para cima ou para baixo, ou use as setas ↑ ↓.</p>
+        <p class="note">Para mudar a ordem, arraste um item para cima ou para baixo, ou use as setas de subir e descer.</p>
+        <div class="de-fora">
+          <div class="de-fora-tit">Ainda não está na Biblioteca? Traga do computador:</div>
+          <div class="acoes">
+            <button class="btn" data-a="importar">+ Fotos, vídeos e músicas</button>
+            <button class="btn" data-a="novaPregacao">${I('pregacao')} Pregação</button>
+          </div>
+          <p class="note">Ou arraste os arquivos para esta janela. Eles vão para a Biblioteca e entram no fim da reunião, na ordem do WhatsApp.</p>
+        </div>
       </div>
     </div>`;
   }
 
   // ---------- Biblioteca ----------
+  // Como mostrar cada tipo: músicas sempre em linhas; vídeos e imagens o pastor escolhe (fica guardado neste notebook).
+  const VISAO_ESCOLHE = ['video', 'imagem'];
+  let visoes = {};
+  try { visoes = JSON.parse(localStorage.getItem('pulpito-visao') || '{}'); } catch {}
+  function visao(tipo) {
+    if (tipo === 'musica') return 'lista';
+    if (VISAO_ESCOLHE.includes(tipo)) return visoes[tipo] === 'lista' ? 'lista' : 'grade';
+    return 'grade';
+  }
+  function trocaVisao(tipo) {
+    if (!VISAO_ESCOLHE.includes(tipo)) return '';
+    const v = visao(tipo);
+    return `<div class="troca-visao" role="group" aria-label="Como mostrar">
+      <button class="btn sm ${v === 'grade' ? 'sel' : ''}" data-a="visao" data-v="grade" title="Quadros grandes">${I('biblioteca')} Quadros</button>
+      <button class="btn sm ${v === 'lista' ? 'sel' : ''}" data-a="visao" data-v="lista" title="Uma linha para cada">${I('linhas')} Linhas</button></div>`;
+  }
   function cartaoArquivo(b, modo) {
     const marcado = modo === 'escolher' && S.escolher.sel.has(b.id);
     const thumb = miniatura(b);
     if (modo === 'escolher') {
       return `<button class="arq escolher ${marcado ? 'marcado' : ''}" data-a="marcar" data-v="${b.id}">${thumb}
-        <div class="info"><div class="t">${marcado ? '✔ ' : ''}${esc(b.titulo)}</div><div class="d">Adicionado em ${ddmm(b.criadoEm)}</div></div></button>`;
+        <div class="info"><div class="t">${marcado ? I('ok') + ' ' : ''}${esc(b.titulo)}</div><div class="d">Adicionado em ${ddmm(b.criadoEm)}</div></div></button>`;
     }
     const nome = S.renomear === b.id
       ? `<form data-renomear="${b.id}"><input type="text" id="renomear-${b.id}" value="${esc(b.titulo)}" maxlength="80"></form>`
@@ -285,15 +312,15 @@
       <div class="acoes">
         ${S.renomear === b.id
           ? `<button class="btn primary" data-a="salvarNome" data-v="${b.id}">Salvar</button><button class="btn" data-a="cancelarNome">Cancelar</button>`
-          : `<button class="btn" data-a="renomear" data-v="${b.id}">✏️ Nome</button><button class="btn danger" data-a="apagarArquivo" data-v="${b.id}">🗑 Apagar</button>`}
+          : `<button class="btn" data-a="renomear" data-v="${b.id}">${I('editar')} Nome</button><button class="btn danger" data-a="apagarArquivo" data-v="${b.id}">${I('lixo')} Apagar</button>`}
       </div></div>`;
   }
 
   // Abas dos tipos de arquivo: uma linha só, todas do mesmo tamanho; com pouco espaço o ícone vai para cima.
   function subAbas(atual, acao) {
-    const qtd = t => M.biblioteca.filter(b => b.tipo === t).length;
-    const tipos = [['video', '🎬', 'Vídeos'], ['imagem', '🖼️', 'Imagens'], ['pregacao', '📑', 'Pregações'], ['musica', '🎵', 'Músicas']];
-    if (acao === 'bibAba') tipos.push(['fundo', '🎨', 'Fundos de versículo', 'Fundos']);
+    const qtd = t => M.biblioteca.filter(b => b.tipo === t).length + (t === 'fundo' && acao === 'bibAba' ? fundosDoPrograma().length : 0);
+    const tipos = [['video', I('video'), 'Vídeos'], ['imagem', I('imagem'), 'Imagens'], ['pregacao', I('pregacao'), 'Pregações'], ['musica', I('musica'), 'Músicas']];
+    if (acao === 'bibAba') tipos.push(['fundo', I('fundo'), 'Fundos de versículo', 'Fundos']);
     const nome = (longo, curto) => curto ? `<span class="longo">${longo}</span><span class="curto">${curto}</span>` : longo;
     return `<div class="tipos-caixa"><div class="tipos">${tipos.map(([t, ic, longo, curto]) => `
       <button class="btn ${atual === t ? 'sel' : ''}" data-a="${acao}" data-v="${t}" title="${longo}">
@@ -315,13 +342,53 @@
           <button type="submit" class="btn primary sm">${S.catForm.id ? 'Salvar' : 'Criar'}</button>
           <button type="button" class="btn sm" data-a="catCancelar">Cancelar</button></form>`
       : `<div class="acoes"><button class="btn sm" data-a="catNova">+ Nova categoria</button>
-          ${atual ? `<button class="btn sm" data-a="catRenomear" data-v="${atual.id}">✏️ Mudar nome de "${esc(atual.nome)}"</button>
-            <button class="btn sm danger" data-a="catApagar" data-v="${atual.id}">🗑 Apagar categoria</button>` : ''}</div>`;
+          ${atual ? `<button class="btn sm" data-a="catRenomear" data-v="${atual.id}">${I('editar')} Mudar nome de "${esc(atual.nome)}"</button>
+            <button class="btn sm danger" data-a="catApagar" data-v="${atual.id}">${I('lixo')} Apagar categoria</button>` : ''}</div>`;
     return `<div class="caixa categorias">
         <div class="cabeca"><h2>Categorias</h2><span class="note">O pastor escolhe a música por categoria no celular.</span></div>
         <div class="sub-abas">${chip('todas', 'Todas', musicas.length)}${cats.map(c => chip(c.id, c.nome, n(c.id))).join('')}${cats.length && n('sem') ? chip('sem', 'Sem categoria', n('sem')) : ''}</div>
         ${form}
       </div>`;
+  }
+
+  // A Biblioteca separada pelo dia em que cada arquivo entrou (o mais novo em cima).
+  function nomeDoDia(d) {
+    if (!d) return 'Sem data';
+    const hoje = M.hoje || new Date().toLocaleDateString('sv-SE');
+    const [a, m, dd] = d.split('-').map(Number);
+    const data = new Date(a, m - 1, dd);
+    const ontem = new Date(); ontem.setDate(ontem.getDate() - 1);
+    if (d === hoje) return 'Hoje · ' + ddmm(d);
+    if (d === ontem.toLocaleDateString('sv-SE')) return 'Ontem · ' + ddmm(d);
+    const dia = data.toLocaleDateString('pt-BR', { weekday: 'long' });
+    return dia.charAt(0).toUpperCase() + dia.slice(1) + ' · ' + (String(a) === hoje.slice(0, 4) ? ddmm(d) : ddmmaaaa(d));
+  }
+  function porDia(lista, modo, tipo) {
+    const dias = [];
+    for (const b of lista.slice().sort((x, y) => (y.criadoEm || '').localeCompare(x.criadoEm || ''))) {
+      const ultimo = dias[dias.length - 1];
+      if (ultimo && ultimo.d === b.criadoEm) ultimo.itens.push(b); else dias.push({ d: b.criadoEm, itens: [b] });
+    }
+    return dias.map(g => `<section class="dia"><h3 class="dia-nome">${esc(nomeDoDia(g.d))} <span>${g.itens.length}</span></h3>
+      <div class="grade ${visao(tipo)}">${g.itens.map(b => cartaoArquivo(b, modo)).join('')}</div></section>`).join('');
+  }
+
+  // Aba Fundos: os que vocês colocaram (dá para apagar) e os que vêm no programa (ficam sempre).
+  const fundosDoPrograma = () => window.Versiculo.FUNDOS.filter(f => !(M.fundosEscondidos || []).includes(f.id));
+  function abaFundos(proprios) {
+    const escondidos = M.fundosEscondidos || [];
+    const lista = fundosDoPrograma();
+    const doPrograma = lista.map(f => `<div class="fundo-op fixo">
+        <span class="amostra">${window.Versiculo.html({ ...EXEMPLO_FUNDO, fundo: { pronto: f.id } }, midia)}</span>
+        <span class="nome-linha"><span class="nome">${esc(f.nome)}</span>
+          <button class="btn sm danger" data-a="esconderFundo" data-v="${f.id}" title="Tirar este fundo da lista">${I('lixo')} Tirar</button></span></div>`).join('');
+    const voltar = escondidos.length
+      ? `<p class="note">Vocês tiraram ${escondidos.length} ${escondidos.length === 1 ? 'fundo' : 'fundos'} do programa. <button class="btn sm" data-a="mostrarFundos">${I('voltar')} Trazer de volta</button></p>` : '';
+    return `<section class="dia"><h3 class="dia-nome">Seus fundos <span>${proprios.length}</span></h3>
+        ${proprios.length ? porDia(proprios, undefined, 'fundo') : '<p class="note">Nenhum ainda. Use "+ Adicionar imagem de fundo" para colocar uma imagem sua.</p>'}</section>
+      <section class="dia"><h3 class="dia-nome">Que vêm no programa <span>${lista.length}</span></h3>
+        <p class="note">Para usar um deles, abra a reunião e clique em "Fundo dos versículos". "Tirar" só tira da lista: dá para trazer de volta.</p>
+        ${lista.length ? `<div class="fundos">${doPrograma}</div>` : ''}${voltar}</section>`;
   }
 
   function biblioteca() {
@@ -333,15 +400,16 @@
       <div class="cabeca"><h1>Biblioteca</h1>
         <div class="acoes">
           ${S.bibAba === 'pregacao'
-            ? '<button class="btn primary" data-a="novaPregacao">📑 + Nova pregação</button>'
+            ? `<button class="btn primary" data-a="novaPregacao">${I('mais')} Nova pregação</button>`
             : `<button class="btn primary" data-a="importar">${S.bibAba === 'fundo' ? '+ Adicionar imagem de fundo' : S.bibAba === 'musica' ? '+ Adicionar músicas' : '+ Adicionar arquivos'}</button>`}
-          <button class="btn danger" data-a="apagarAntigos" ${antigos ? '' : 'disabled'}>🗑 Apagar antigos (${antigos})</button>
+          <button class="btn danger" data-a="apagarAntigos" ${antigos ? '' : 'disabled'}>${I('lixo')} Apagar antigos (${antigos})</button>
         </div></div>
       <p class="note">"Apagar antigos" apaga fotos, vídeos e pregações que não foram usados nos últimos 7 dias e não estão em nenhuma reunião de hoje em diante. Músicas e fundos nunca são apagados por ele.</p>
       ${subAbas(S.bibAba, 'bibAba')}
       ${S.bibAba === 'musica' ? barraCategorias() : ''}
-      ${lista.length ? `<div class="grade">${lista.map(b => cartaoArquivo(b)).join('')}</div>`
-        : `<div class="vazio"><div class="grande">${S.bibAba === 'fundo' ? '🎨' : '🗂️'}</div><div>${S.bibAba === 'video' ? 'Nenhum vídeo ainda.' : S.bibAba === 'musica' ? 'Nenhuma música ainda. Hinos, louvores e fundos de oração ficam guardados aqui para sempre.' : S.bibAba === 'pregacao' ? 'Nenhuma pregação ainda. Use "+ Nova pregação" e escolha todas as imagens que o bispo mandou.' : S.bibAba === 'fundo' ? 'Nenhum fundo próprio ainda. Os fundos que vêm no programa aparecem na hora de escolher o fundo da reunião.' : 'Nenhuma imagem ainda.'}</div></div>`}
+      ${trocaVisao(S.bibAba)}
+      ${S.bibAba === 'fundo' ? abaFundos(lista) : lista.length ? porDia(lista, undefined, S.bibAba)
+        : `<div class="vazio"><div class="grande">${I(S.bibAba === 'fundo' ? 'fundo' : 'biblioteca')}</div><div>${S.bibAba === 'video' ? 'Nenhum vídeo ainda.' : S.bibAba === 'musica' ? 'Nenhuma música ainda. Hinos, louvores e fundos de oração ficam guardados aqui para sempre.' : S.bibAba === 'pregacao' ? 'Nenhuma pregação ainda. Use "+ Nova pregação" e escolha todas as imagens que o bispo mandou.' : S.bibAba === 'fundo' ? 'Nenhum fundo próprio ainda. Os fundos que vêm no programa aparecem na hora de escolher o fundo da reunião.' : 'Nenhuma imagem ainda.'}</div></div>`}
     </div>`;
   }
 
@@ -349,9 +417,10 @@
     const e = S.escolher;
     const lista = M.biblioteca.filter(b => b.tipo === e.aba).slice().reverse();
     return `<div class="fundo-modal"><div class="janela" role="dialog" aria-label="Escolher da Biblioteca">
-      <header><h2>Escolher da Biblioteca</h2><button class="btn sm" data-a="fecharModal">✕ Fechar</button></header>
+      <header><h2>Escolher da Biblioteca</h2><button class="btn sm" data-a="fecharModal">${I('fechar')} Fechar</button></header>
       <div class="corpo">${subAbas(e.aba, 'escolherAba')}
-        ${lista.length ? `<div class="grade">${lista.map(b => cartaoArquivo(b, 'escolher')).join('')}</div>` : '<div class="vazio">Nada aqui ainda.</div>'}
+        ${trocaVisao(e.aba)}
+        ${lista.length ? porDia(lista, 'escolher', e.aba) : '<div class="vazio">Nada aqui ainda.</div>'}
         <p class="note">Toque nos arquivos para marcar. Eles entram no fim da reunião, na ordem em que foram marcados.</p></div>
       <footer><span class="note">${e.sel.size} marcado(s)</span>
         <button class="btn primary" data-a="colocar" ${e.sel.size ? '' : 'disabled'}>Colocar na reunião</button></footer>
@@ -381,16 +450,16 @@
     } else {
       palco = it.tipo === 'imagem' ? `<img src="${midia(it.arquivo)}" alt="">`
         : it.tipo === 'pregacao' ? `<img src="${midia(it.arquivos[slide])}" alt="">`
-        : it.tipo === 'musica' ? `<div class="palco-musica"><div>🎵</div><audio src="${midia(it.arquivo)}" controls></audio><p>A música toca sem mudar a TV: ela continua mostrando o item anterior.</p></div>`
+        : it.tipo === 'musica' ? `<div class="palco-musica"><div>${I('musica')}</div><audio src="${midia(it.arquivo)}" controls></audio><p>A música toca sem mudar a TV: ela continua mostrando o item anterior.</p></div>`
         : `<video src="${midia(it.arquivo)}" controls autoplay></video>`;
     }
     return `<div class="fundo-modal"><div class="janela" role="dialog" aria-label="Testar a reunião">
-      <header><h2>Testar · ${i + 1} de ${telas.length}: ${p ? 'Palavra · ' + esc(p.titulo) : esc(it.titulo) + (slide != null ? ` · imagem ${slide + 1} de ${it.arquivos.length}` : '')}</h2><button class="btn sm" data-a="fecharModal">✕ Fechar</button></header>
+      <header><h2>Testar · ${i + 1} de ${telas.length}: ${p ? 'Palavra · ' + esc(p.titulo) : esc(it.titulo) + (slide != null ? ` · imagem ${slide + 1} de ${it.arquivos.length}` : '')}</h2><button class="btn sm" data-a="fecharModal">${I('fechar')} Fechar</button></header>
       <div class="corpo"><div class="palco">${palco}</div>
         <p class="note">Assim aparece na TV. Este teste não mexe na TV da igreja.${p ? ' No culto, as setas do celular passam pelos outros versículos.' : ''}</p></div>
       <footer>
-        <button class="btn" data-a="testarPasso" data-v="-1" ${i === 0 ? 'disabled' : ''}>◀ Anterior</button>
-        <button class="btn primary" data-a="testarPasso" data-v="1" ${i === telas.length - 1 ? 'disabled' : ''}>Próximo ▶</button>
+        <button class="btn" data-a="testarPasso" data-v="-1" ${i === 0 ? 'disabled' : ''}>${I('esq')} Anterior</button>
+        <button class="btn primary" data-a="testarPasso" data-v="1" ${i === telas.length - 1 ? 'disabled' : ''}>Próximo ${I('dir')}</button>
       </footer></div></div>`;
   }
 
@@ -420,7 +489,7 @@
     const v = S.verso;
     const r = reuniaoAberta();
     const idx = indice(versaoDoVerso());
-    const cab = `<header><h2>${v.palavraId ? '📖 Mais um versículo nesta Palavra' : '📖 Nova Palavra (entra no fim da reunião)'}</h2><button class="btn sm" data-a="fecharModal">✕ Fechar</button></header>`;
+    const cab = `<header><h2>${v.palavraId ? 'Mais um versículo nesta Palavra' : 'Nova Palavra (entra no fim da reunião)'}</h2><button class="btn sm" data-a="fecharModal">${I('fechar')} Fechar</button></header>`;
     if (!idx || !r) return `<div class="fundo-modal"><div class="janela">${cab}<div class="corpo"><div class="vazio">Abrindo a Bíblia…</div></div></div></div>`;
     const livro = v.l != null ? idx[v.l] : null;
 
@@ -483,13 +552,13 @@
     const r = reuniaoAberta();
     if (!r) { S.fundo = false; return ''; }
     const proprios = M.biblioteca.filter(b => b.tipo === 'fundo');
-    const opcoes = window.Versiculo.FUNDOS.map(f => ({ id: f.id, nome: f.nome, fundo: { pronto: f.id } }))
+    const opcoes = fundosDoPrograma().map(f => ({ id: f.id, nome: f.nome, fundo: { pronto: f.id } }))
       .concat(proprios.map(b => ({ id: b.id, nome: b.titulo, fundo: { arquivo: b.arquivo } })));
     const tile = o => `<button class="fundo-op ${r.fundoId === o.id ? 'sel' : ''}" data-a="escolherFundo" data-v="${o.id}">
         <span class="amostra">${window.Versiculo.html({ ...EXEMPLO_FUNDO, fundo: o.fundo }, midia)}</span>
-        <span class="nome">${r.fundoId === o.id ? '✓ ' : ''}${esc(o.nome)}</span></button>`;
+        <span class="nome">${r.fundoId === o.id ? I('ok') + ' ' : ''}${esc(o.nome)}</span></button>`;
     return `<div class="fundo-modal"><div class="janela" role="dialog" aria-label="Fundo dos versículos">
-      <header><h2>🎨 Fundo dos versículos desta reunião</h2><button class="btn sm" data-a="fecharModal">✕ Fechar</button></header>
+      <header><h2>Fundo dos versículos desta reunião</h2><button class="btn sm" data-a="fecharModal">${I('fechar')} Fechar</button></header>
       <div class="corpo"><p class="note">Toque no fundo que você quer. Todos os versículos desta reunião aparecem com ele, inclusive os escolhidos na hora pelo celular.</p>
         <div class="fundos">${opcoes.map(tile).join('')}</div></div>
       <footer><button class="btn" data-a="importar">+ Usar uma imagem minha</button><button class="btn primary" data-a="fecharModal">Pronto</button></footer>
@@ -510,7 +579,7 @@
           <span class="amostra"><img src="${j.miniatura}" alt=""></span>
           <span class="nome">${j.icone ? `<img src="${j.icone}" alt="">` : ''}${esc(j.nome)}</span></button>`).join('')}</div>`;
     return `<div class="fundo-modal"><div class="janela" role="dialog" aria-label="Mostrar uma janela na TV">
-      <header><h2>📺 Qual janela vai aparecer na TV?</h2><button class="btn sm" data-a="fecharModal">✕ Fechar</button></header>
+      <header><h2>Qual janela vai aparecer na TV?</h2><button class="btn sm" data-a="fecharModal">${I('fechar')} Fechar</button></header>
       <div class="corpo">
         <ol class="dicas">
           <li>Abra o vídeo antes (no Telegram ou no navegador) e deixe <b>pausado</b>.</li>
@@ -520,7 +589,38 @@
         </ol>
         ${corpo}
       </div>
-      <footer><button class="btn" data-a="recarregarJanelas">🔄 Procurar de novo</button><span class="note">Para voltar: toque em qualquer cartão no celular ou em "Voltar para o Púlpito".</span></footer>
+      <footer><button class="btn" data-a="recarregarJanelas">${I('procurar')} Procurar de novo</button><span class="note">Para voltar: toque em qualquer cartão no celular ou em "Voltar para o Púlpito".</span></footer>
+    </div></div>`;
+  }
+
+  // ---------- Tela de espera da reunião ----------
+  // Como a tela de espera aparece (para as miniaturas). null = a do programa: foto + "Seja bem-vindo".
+  function esperaCss(esp) {
+    if (esp && esp.arquivo) return `url("${midia(esp.arquivo)}") center / cover no-repeat`;
+    if (esp && esp.foto) return `url("${esp.foto}") center / cover no-repeat`;
+    return 'linear-gradient(rgba(0,0,0,.5), rgba(0,0,0,.6)), url("/comum/fundos/amanhecer-dourado.jpg") center / cover no-repeat';
+  }
+  function amostraEspera(esp) {
+    return `<span class="amostra espera-amostra" style='background:${esperaCss(esp)}'>${esp ? '' : '<b>Seja bem-vindo</b>'}</span>`;
+  }
+  function janelaEspera() {
+    const r = reuniaoAberta();
+    if (!r) { S.espera = false; return ''; }
+    const padrao = M.info.telaEspera ? { arquivo: M.info.telaEspera } : null;
+    const fotos = window.Versiculo.FUNDOS.filter(f => f.foto).map(f => ({ id: f.id, nome: f.nome, esp: { foto: f.foto } }));
+    const proprias = M.biblioteca.filter(b => b.tipo === 'imagem' || b.tipo === 'fundo').slice().reverse().map(b => ({ id: b.id, nome: b.titulo, esp: { arquivo: b.arquivo } }));
+    const sel = r.telaEsperaId || '';
+    const tile = (id, nome, esp) => `<button class="fundo-op ${sel === id ? 'sel' : ''}" data-a="escolherEspera" data-v="${id}">
+        ${amostraEspera(esp)}<span class="nome">${sel === id ? I('ok') + ' ' : ''}${esc(nome)}</span></button>`;
+    return `<div class="fundo-modal"><div class="janela" role="dialog" aria-label="Tela de espera desta reunião">
+      <header><h2>Tela de espera desta reunião</h2><button class="btn sm" data-a="fecharModal">${I('fechar')} Fechar</button></header>
+      <div class="corpo"><p class="note">É o que aparece na TV antes de começar e quando nada está passando. Se não escolher, fica a padrão.</p>
+        <div class="fundos">${tile('', 'Padrão', padrao)}</div>
+        <h3 class="sub-titulo">Fotos do programa</h3>
+        <div class="fundos">${fotos.map(f => tile(f.id, f.nome, f.esp)).join('')}</div>
+        ${proprias.length ? `<h3 class="sub-titulo">Imagens da Biblioteca</h3><div class="fundos">${proprias.map(f => tile(f.id, f.nome, f.esp)).join('')}</div>` : ''}
+      </div>
+      <footer><span class="note">A padrão muda em Configurações → Tela de espera.</span><button class="btn primary" data-a="fecharModal">Pronto</button></footer>
     </div></div>`;
   }
 
@@ -535,11 +635,9 @@
       </form>` : '';
     const pastores = M.pastores.map(p => `<div class="pastor">
         <div><div class="t">${esc(p.nome)}</div><div class="note">Bíblia ${p.versao}</div></div>
-        <div class="acoes"><button class="btn sm" data-a="editarPastor" data-v="${p.id}">✏️ Editar</button>
-          <button class="btn danger sm" data-a="removerPastor" data-v="${p.id}">🗑</button></div></div>`).join('');
-    const espera = M.info.telaEspera
-      ? `<div class="espera-mini"><img src="${midia(M.info.telaEspera)}" alt="Tela de espera atual"></div>`
-      : `<div class="espera-mini">Seja bem-vindo</div>`;
+        <div class="acoes"><button class="btn sm" data-a="editarPastor" data-v="${p.id}">${I('editar')} Editar</button>
+          <button class="btn danger sm" data-a="removerPastor" data-v="${p.id}" aria-label="Remover pastor">${I('lixo')}</button></div></div>`).join('');
+    const espera = `<div class="espera-mini" style='background:${esperaCss(M.info.telaEspera ? { arquivo: M.info.telaEspera } : null)}'>${M.info.telaEspera ? '' : '<b>Seja bem-vindo</b>'}</div>`;
 
     return `<div class="pagina">
       <h1>Configurações</h1>
@@ -549,16 +647,18 @@
         ${pastores || (f ? '' : '<p class="note">Nenhum pastor cadastrado.</p>')}
       </section>
       <section class="caixa">
-        <h2>Tela de espera</h2>
-        <p class="note">A imagem que aparece na TV antes e depois da reunião.</p>
+        <h2>Tela de espera padrão</h2>
+        <p class="note">O que aparece na TV antes e depois da reunião. Cada reunião pode escolher outra, no botão "Tela de espera" dentro da reunião.
+          A do programa é uma foto com a logo da igreja e "Seja bem-vindo".</p>
         ${espera}
-        <div class="acoes"><button class="btn" data-a="trocarEspera">Trocar imagem</button></div>
+        <div class="acoes"><button class="btn" data-a="trocarEspera">Usar uma imagem minha</button>
+          ${M.info.telaEspera ? '<button class="btn" data-a="esperaDoPrograma">Voltar para a do programa</button>' : ''}</div>
       </section>
       <section class="caixa">
         <h2>Monitores</h2>
         <p class="note">${M.info.tv === 'tv' ? 'A TV está ligada.' : 'A TV não foi encontrada. O Telão está numa janela.'}
           ${M.info.telas > 1 ? 'Se a TV e o notebook estiverem trocados, use o botão abaixo.' : ''}</p>
-        ${M.info.telas > 1 ? '<div class="acoes"><button class="btn" data-a="trocarTelas">Trocar TV ⇄ notebook</button></div>' : ''}
+        ${M.info.telas > 1 ? `<div class="acoes"><button class="btn" data-a="trocarTelas">${I('trocar')} Trocar TV e notebook</button></div>` : ''}
       </section>
       <section class="caixa">
         <h2>Logo da igreja</h2>
@@ -633,6 +733,8 @@
 
   const ACOES = {
     aba: v => { S.aba = v; S.form = null; S.renomear = null; },
+    // Começa a reunião (se ainda não é a que está na TV) e abre o controle aqui no notebook.
+    passarAqui: v => { if (M.estado.reuniaoId !== v) enviar({ cmd: 'escolherReuniao', id: v }); S.aba = 'reserva'; S.form = null; S.renomear = null; },
     nova: () => { S.form = { modo: 'nova', pastorId: M.pastores.length === 1 ? M.pastores[0].id : null, data: M.hoje, hora: '19:00', nome: '' }; },
     copiar: v => {
       const o = M.reunioesCompletas.find(r => r.id === v);
@@ -684,7 +786,14 @@
       avisar(`${S.escolher.sel.size} colocado(s) na reunião.`);
       S.escolher = null;
     },
-    fecharModal: () => { S.escolher = null; S.testar = null; S.verso = null; S.fundo = false; S.janelas = null; },
+    fecharModal: () => { S.escolher = null; S.testar = null; S.verso = null; S.fundo = false; S.janelas = null; S.espera = false; },
+    abrirEspera: () => { S.espera = true; },
+    escolherEspera: v => {
+      const r = reuniaoAberta();
+      r.telaEsperaId = v || null;  // já mostra marcado enquanto o notebook grava
+      enviar({ cmd: 'editarReuniao', id: S.aberta, campos: { telaEspera: v || null } });
+    },
+    esperaDoPrograma: () => window.notebook.telaEsperaDoPrograma(),
     abrirJanelas: () => { S.janelas = { lista: null }; carregarJanelas(); },
     recarregarJanelas: () => { S.janelas = { lista: null }; carregarJanelas(); },
     mostrarJanela: v => {
@@ -730,6 +839,11 @@
     },
     testarPasso: v => { S.testar += Number(v); },
     bibAba: v => { S.bibAba = v; S.renomear = null; S.catForm = null; },
+    visao: v => {
+      const tipo = S.escolher ? S.escolher.aba : S.bibAba;
+      visoes[tipo] = v;
+      try { localStorage.setItem('pulpito-visao', JSON.stringify(visoes)); } catch {}
+    },
     catFiltro: v => { S.catFiltro = v; S.catForm = null; },
     catNova: () => { S.catForm = { nome: '' }; setTimeout(() => $('cat-nome')?.focus()); },
     catRenomear: v => { const c = M.categorias.find(x => x.id === v); S.catForm = { id: v, nome: c ? c.nome : '' }; setTimeout(() => $('cat-nome')?.focus()); },
@@ -763,6 +877,8 @@
       if (confirm(`Remover ${p.nome}?\nAs reuniões dele continuam, mas ficam sem pastor.`)) enviar({ cmd: 'removerPastor', id: v });
     },
     trocarEspera: () => window.notebook.trocarTelaEspera(),
+    esconderFundo: v => enviar({ cmd: 'esconderFundo', id: v }),
+    mostrarFundos: () => enviar({ cmd: 'mostrarFundosDoPrograma' }),
     trocarTelas: () => window.notebook.trocarTelas(),
     escolherLogo: async () => {
       const r = await window.notebook.escolherLogo();

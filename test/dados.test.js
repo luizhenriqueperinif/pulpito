@@ -405,3 +405,39 @@ test('categorias de música: criar, pôr música, mudar nome e apagar', () => {
   assert.ok(d.arquivoDaBiblioteca('h1'), 'a música continua na Biblioteca');
   assert.equal(d.arquivoDaBiblioteca('h1').categoria, undefined);
 });
+
+test('imagem do vídeo: automática, a antiga é trocada e some junto com o vídeo', () => {
+  const d = new Dados(pastaTemp());
+  const { novos } = d.importarArquivos(arquivos('testemunho.mp4', 'foto.png'));
+  const vid = novos.find(b => b.tipo === 'video'), foto = novos.find(b => b.tipo === 'imagem');
+  assert.deepEqual(d.videosSemCapa().map(b => b.id), [vid.id], 'só vídeos sem imagem');
+  d.salvarCapaAutomatica(vid.id, Buffer.from('jpg'));
+  const capa = d.arquivoDaBiblioteca(vid.id).capa;
+  assert.ok(fs.existsSync(path.join(d.pastaMidia, capa)));
+  assert.deepEqual(d.videosSemCapa(), []);
+  // imagem de antes (do meio do vídeo): o programa tira de novo, do fim
+  delete d.arquivoDaBiblioteca(vid.id).capaDe;
+  assert.deepEqual(d.videosSemCapa().map(b => b.id), [vid.id]);
+  d.salvarCapaAutomatica(vid.id, Buffer.from('jpg2'));
+  const nova = d.arquivoDaBiblioteca(vid.id).capa;
+  assert.equal(fs.existsSync(path.join(d.pastaMidia, capa)), false, 'a antiga é apagada');
+  assert.equal(d.salvarCapaAutomatica(foto.id, Buffer.from('x')), false, 'só vídeo tem imagem');
+  d.removerDaBiblioteca(vid.id);
+  assert.equal(fs.existsSync(path.join(d.pastaMidia, nova)), false);
+});
+
+test('tirar um fundo do programa: some da lista, a reunião que usava volta para o padrão, e dá para trazer de volta', () => {
+  const d = novo();
+  const r = d.criarReuniao({ data: '2026-11-08', hora: '18:00' });
+  d.editarReuniao(r.id, { fundo: 'trigo' });
+  assert.equal(d.esconderFundo('trigo'), true);
+  assert.deepEqual(d.fundosEscondidos, ['trigo']);
+  assert.equal(d.reuniaoCompleta(r.id).fundoId, 'ceu', 'volta para o padrão');
+  assert.equal(d.esconderFundo('nao-existe'), false);
+  // tirou o padrão: o padrão passa a ser o primeiro que sobrou
+  d.esconderFundo('ceu');
+  assert.equal(d.reuniaoCompleta(r.id).fundoId, 'amanhecer');
+  assert.deepEqual(d.reuniaoCompleta(r.id).fundo, { pronto: 'amanhecer' });
+  d.mostrarFundosDoPrograma();
+  assert.deepEqual(d.fundosEscondidos, []);
+});

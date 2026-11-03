@@ -55,7 +55,9 @@ function aplicar(e, cmd, ctx) {
         tv,
         tvAntesPreto: null,
         tvAntesAvulso: null,
-        audio: null, // outra coisa foi para a TV: a música para
+        // A música continua com imagem, Palavra e pregação (é o fundo da oração).
+        // Só para com vídeo, que tem o próprio som.
+        audio: it.tipo === 'video' ? null : e.audio,
         video: it.tipo === 'video'
           ? { itemId: it.id, tocando: true, t: 0, dur: null, terminou: false, inicio }
           : null,
@@ -73,7 +75,7 @@ function aplicar(e, cmd, ctx) {
         tvAntesPreto: null,
         tvAntesAvulso: null,
         video: null,
-        audio: null,
+        audio: e.audio,
       };
     }
 
@@ -168,6 +170,15 @@ function aplicar(e, cmd, ctx) {
       return { ...e, audio: { ...e.audio, tocando: true } };
     }
 
+    case 'audioIr': {
+      // Tocou na barrinha: a música vai para esse ponto (salto avisa o Telão para pular).
+      if (!e.audio) return e;
+      const t = Math.max(0, Number(cmd.t) || 0);
+      const dur = e.audio.dur || 0;
+      if (dur && t >= dur) return e;
+      return { ...e, audio: { ...e.audio, t, terminou: false, salto: (e.audio.salto || 0) + 1 } };
+    }
+
     case 'audioParar':
       return e.audio ? { ...e, audio: null } : e;
 
@@ -188,6 +199,14 @@ function aplicar(e, cmd, ctx) {
     case 'videoPausar': {
       if (!e.video || !e.video.tocando) return e;
       return { ...e, video: { ...e.video, tocando: false } };
+    }
+
+    case 'videoIr': {
+      if (!e.video) return e;
+      const t = Math.max(0, Number(cmd.t) || 0);
+      const dur = e.video.dur || 0;
+      if (dur && t >= dur) return e;
+      return { ...e, video: { ...e.video, t, terminou: false, salto: (e.video.salto || 0) + 1 } };
     }
 
     case 'videoContinuar': {

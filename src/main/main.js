@@ -5,13 +5,31 @@ const path = require('path');
 const { execFile, execFileSync } = require('child_process');
 const { Dados, EXT_IMAGEM, EXT_VIDEO, EXT_AUDIO } = require('./dados');
 const { criarServidor } = require('./servidor');
+const { criarTeclas } = require('./teclas');
 
 // Os dados ficam sempre na mesma pasta, rodando pelo código (npm start) ou instalado (.exe).
 app.setPath('userData', path.join(app.getPath('appData'), 'auxilio-reuniao'));
 
 if (!app.requestSingleInstanceLock()) { app.quit(); }
 
+// Um erro inesperado nunca pode abrir janela de erro no meio da reunião:
+// fica anotado em "erros.log" (na pasta de dados) e o programa continua.
+function anotarErro(tipo, e) {
+  const texto = `[${new Date().toLocaleString('pt-BR')}] ${tipo}: ${(e && e.stack) || e}\n\n`;
+  try { fs.appendFileSync(path.join(app.getPath('userData'), 'erros.log'), texto); } catch {}
+  console.error(texto);
+}
+process.on('uncaughtException', e => anotarErro('Erro', e));
+process.on('unhandledRejection', e => anotarErro('Erro (promessa)', e));
+
 let dados, servidor, painel, telao;
+
+/**
+ * Modo de teste: rodando pelo código (npm start), o Telão abre numa janela pequena no canto
+ * e o programa não mexe no Windows (monitores, notificações, tela apagar).
+ * O programa instalado (.exe) ou "npm run tv" funcionam como na igreja.
+ */
+const TESTE = !app.isPackaged && !process.argv.includes('--tv');
 
 function urlLocal(pagina) {
   return `http://127.0.0.1:${servidor.porta}/${pagina}/?t=${servidor.token}`;
@@ -50,6 +68,7 @@ function moverPainelParaFora(tv) {
 
 function abrirTelao() {
   if (telao && !telao.isDestroyed()) telao.destroy();
+  if (TESTE) return abrirTelaoDeTeste();
   const tv = telaDaTv();
   const opcoes = {
     backgroundColor: '#000000',
@@ -75,10 +94,27 @@ function abrirTelao() {
   servidor.definirTv(tv ? 'tv' : 'janela', screen.getAllDisplays().length);
 }
 
+/** Telão pequeno (16:9) no canto de baixo da tela, que pode ser movido e aumentado. */
+function abrirTelaoDeTeste() {
+  const area = screen.getPrimaryDisplay().workArea;
+  const w = 480, h = 270;
+  telao = new BrowserWindow({
+    x: area.x + area.width - w - 24, y: area.y + area.height - h - 24,
+    width: w, height: h, useContentSize: true, minWidth: 240, minHeight: 135,
+    title: 'Telão (teste)', backgroundColor: '#000000', show: false, autoHideMenuBar: true,
+    webPreferences: { autoplayPolicy: 'no-user-gesture-required', backgroundThrottling: false },
+  });
+  telao.setAspectRatio(16 / 9);
+  telao.once('ready-to-show', () => telao.showInactive());
+  telao.loadURL(urlLocal('telao'));
+  telao.on('closed', () => { telao = null; });
+  servidor.definirTv('janela', screen.getAllDisplays().length);
+}
+
 function abrirPainel() {
   painel = new BrowserWindow({
     width: 1280, height: 820, minWidth: 900, minHeight: 600,
-    title: 'Púlpito',
+    title: TESTE ? 'Púlpito (modo de teste)' : 'Púlpito',
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#0e0f12' : '#f4f5f7',
     autoHideMenuBar: true,
     webPreferences: { preload: path.join(__dirname, 'preload.js') },
@@ -198,16 +234,23 @@ ipcMain.handle('trocar-tela-espera', async () => {
   return true;
 });
 
+ipcMain.handle('tela-espera-do-programa', () => { dados.voltarTelaEsperaDoPrograma(); servidor.transmitir(); return true; });
+
 ipcMain.handle('atualizar-endereco', () => servidor.atualizarEndereco());
 
 // Janelas abertas no notebook que podem aparecer na TV (menos as do próprio Púlpito).
-ipcMain.handle('listar-janelas', async () => {
+async function listarJanelas(pequeno) {
   const minhas = new Set([painel, telao].filter(w => w && !w.isDestroyed()).map(w => w.getMediaSourceId()));
-  const fontes = await desktopCapturer.getSources({ types: ['window'], thumbnailSize: { width: 480, height: 270 }, fetchWindowIcons: true });
+  const tam = pequeno ? { width: 320, height: 180 } : { width: 480, height: 270 };
+  const fontes = await desktopCapturer.getSources({ types: ['window'], thumbnailSize: tam, fetchWindowIcons: !pequeno });
   return fontes
     .filter(f => !minhas.has(f.id) && f.name && !f.thumbnail.isEmpty())
-    .map(f => ({ id: f.id, nome: f.name, miniatura: f.thumbnail.toDataURL(), icone: f.appIcon && !f.appIcon.isEmpty() ? f.appIcon.toDataURL() : null }));
-});
+    // Para o celular vai em JPEG, que é bem mais leve pelo Wi-Fi.
+    .map(f => ({ id: f.id, nome: f.name, miniatura: pequeno ? 'data:image/jpeg;base64,' + f.thumbnail.toJPEG(70).toString('base64') : f.thumbnail.toDataURL(), icone: !pequeno && f.appIcon && !f.appIcon.isEmpty() ? f.appIcon.toDataURL() : null }));
+}
+ipcMain.handle('listar-janelas', () => listarJanelas(false));
+// O celular também mexe na janela que está na TV (tocar, pausar, adiantar, voltar).
+const teclas = criarTeclas();
 
 ipcMain.handle('trocar-telas', () => {
   const telas = screen.getAllDisplays();
@@ -279,16 +322,67 @@ ipcMain.handle('mudar-opcao', (_e, { nome, valor } = {}) => {
   if (nome === 'esconderNotificacoes') {
     dados.config.esconderNotificacoes = !!valor;
     dados.salvar();
-    if (valor) esconderNotificacoes(); else devolverNotificacoes();
+    if (valor && !TESTE) esconderNotificacoes(); else devolverNotificacoes();
   }
   return true;
 });
+
+// ---------- Capa dos vídeos ----------
+// O programa abre o vídeo escondido, vai para o fim e tira uma foto do último quadro:
+// é o que fica parado na TV quando o vídeo acaba, e é por ele que o pastor reconhece o vídeo.
+function tirarQuadro(url) {
+  return new Promise(ok => {
+    const v = document.createElement('video');
+    v.muted = true; v.preload = 'auto'; v.src = url;
+    const desiste = setTimeout(() => ok(null), 20000);
+    v.onloadedmetadata = () => {
+      const d = v.duration;
+      v.currentTime = isFinite(d) && d > 0.3 ? d - 0.1 : 0;
+    };
+    v.onseeked = () => {
+      const c = document.createElement('canvas');
+      c.width = 640;
+      c.height = Math.round(640 * ((v.videoHeight / v.videoWidth) || 9 / 16));
+      c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+      clearTimeout(desiste);
+      ok(c.toDataURL('image/jpeg', 0.82));
+    };
+    v.onerror = () => { clearTimeout(desiste); ok(null); };
+  });
+}
+
+let tirandoCapas = false;
+const capaNaoDeu = new Set();   // vídeo que o programa não conseguiu abrir: não tenta de novo nesta vez
+async function tirarCapas() {
+  if (tirandoCapas || !dados || !servidor) return;
+  const lista = dados.videosSemCapa().filter(b => !capaNaoDeu.has(b.id));
+  if (!lista.length) return;
+  tirandoCapas = true;
+  let mudou = false;
+  const w = new BrowserWindow({ show: false, width: 640, height: 360, webPreferences: { offscreen: true, backgroundThrottling: false } });
+  try {
+    await w.loadURL(`http://127.0.0.1:${dados.config.porta}/comum/capa.html`);
+    for (const b of lista) {
+      const url = `/midia/${encodeURIComponent(b.arquivo)}?t=${encodeURIComponent(dados.config.token)}`;
+      const foto = await w.webContents.executeJavaScript(`(${tirarQuadro.toString()})(${JSON.stringify(url)})`).catch(() => null);
+      if (typeof foto === 'string' && foto.startsWith('data:image/jpeg') && foto.length > 2000) {
+        mudou = dados.salvarCapaAutomatica(b.id, Buffer.from(foto.split(',')[1], 'base64')) || mudou;
+      } else capaNaoDeu.add(b.id);
+    }
+  } catch (e) {
+    anotarErro('Capa do vídeo', e);
+  } finally {
+    w.destroy();
+    tirandoCapas = false;
+  }
+  if (mudou) servidor.transmitir();
+}
 
 app.on('second-instance', () => { if (painel) { if (painel.isMinimized()) painel.restore(); painel.focus(); } });
 
 app.whenReady().then(async () => {
   dados = new Dados(path.join(app.getPath('userData'), 'dados'));
-  servidor = criarServidor({ dados });
+  servidor = criarServidor({ dados, janelas: { listar: () => listarJanelas(true), apertar: teclas.apertar } });
   try {
     await servidor.iniciar();
   } catch (e) {
@@ -296,15 +390,24 @@ app.whenReady().then(async () => {
     app.quit();
     return;
   }
+  abrirPainel();
+  // De tempos em tempos vê se chegou vídeo novo sem capa (do notebook ou do celular).
+  setTimeout(tirarCapas, 3000);
+  setInterval(tirarCapas, 8000);
+  if (TESTE) {
+    // No modo de teste não mexe no Windows; só devolve as notificações se tinham ficado escondidas.
+    devolverNotificacoes();
+    abrirTelao();
+    return;
+  }
   powerSaveBlocker.start('prevent-display-sleep');
   aplicarIniciarComWindows();
   esconderNotificacoes();
   estenderTelas();
-  abrirPainel();
   abrirTelao();
   screen.on('display-added', telasMudaram);
   screen.on('display-removed', telasMudaram);
 });
 
 app.on('window-all-closed', () => app.quit());
-app.on('before-quit', () => { devolverNotificacoes(); servidor?.fechar(); });
+app.on('before-quit', () => { devolverNotificacoes(); servidor?.fechar(); teclas.fechar(); });

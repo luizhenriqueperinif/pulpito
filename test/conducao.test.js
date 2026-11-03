@@ -201,11 +201,21 @@ test('música toca sem mudar a TV', () => {
   assert.equal(aplicar(e, { cmd: 'mostrar', itemId: 'hino' }, ctx), e, 'tocar de novo não recomeça');
 });
 
-test('a música para quando outra coisa vai para a TV', () => {
-  let e = run({ cmd: 'escolherReuniao', id: 'r1' }, { cmd: 'mostrar', itemId: 'hino' }, { cmd: 'mostrar', itemId: 'img' });
+test('a música continua com imagem, Palavra e pregação na TV', () => {
+  for (const itemId of ['img', 'pal', 'preg']) {
+    const e = run({ cmd: 'escolherReuniao', id: 'r1' }, { cmd: 'mostrar', itemId: 'hino' }, { cmd: 'mostrar', itemId });
+    assert.equal(e.tv.itemId, itemId);
+    assert.equal(e.audio && e.audio.tocando, true, itemId);
+  }
+  const e = run({ cmd: 'escolherReuniao', id: 'r1' }, { cmd: 'mostrar', itemId: 'hino' }, { cmd: 'mostrar', itemId: 'pal' },
+    { cmd: 'mostrarPassagem', itemId: 'pal', passagemId: 'p2' });
+  assert.equal(e.audio && e.audio.tocando, true, 'outra passagem');
+});
+
+test('a música para quando um vídeo vai para a TV (o vídeo tem som)', () => {
+  const e = run({ cmd: 'escolherReuniao', id: 'r1' }, { cmd: 'mostrar', itemId: 'hino' }, { cmd: 'mostrar', itemId: 'vid' });
   assert.equal(e.audio, null);
-  e = run({ cmd: 'escolherReuniao', id: 'r1' }, { cmd: 'mostrar', itemId: 'hino' }, { cmd: 'mostrar', itemId: 'pal' });
-  assert.equal(e.audio, null);
+  assert.equal(e.video.tocando, true);
 });
 
 test('música continua ao apagar a TV e ao passar versículos', () => {
@@ -268,4 +278,22 @@ test('janela do notebook na TV: entra, para a música e volta para o que estava'
   // apagar e acender a TV volta para a janela
   e = run(R, { cmd: 'mostrarJanela', fonteId: 'window:1:0' }, { cmd: 'apagar' }, { cmd: 'apagar' });
   assert.equal(e.tv.tipo, 'janela');
+});
+
+test('barrinha: adianta e volta a música e o vídeo sem recomeçar', () => {
+  let e = run({ cmd: 'escolherReuniao', id: 'r1' }, { cmd: 'mostrar', itemId: 'hino' }, { cmd: 'audioProgresso', inicio: 1, t: 5, dur: 200 });
+  const inicio = e.audio.inicio;
+  e = aplicar(e, { cmd: 'audioIr', t: 120 }, ctx);
+  assert.equal(e.audio.t, 120);
+  assert.equal(e.audio.salto, 1);
+  assert.equal(e.audio.inicio, inicio, 'não recomeça a música');
+  assert.equal(aplicar(e, { cmd: 'audioIr', t: 999 }, ctx), e, 'depois do fim não vai');
+  e = aplicar(e, { cmd: 'audioIr', t: 10 }, ctx);
+  assert.equal(e.audio.salto, 2);
+  // terminou e voltou: pode tocar de novo dali
+  e = aplicar(aplicar(e, { cmd: 'audioProgresso', inicio, t: 200, dur: 200, terminou: true }, ctx), { cmd: 'audioIr', t: 50 }, ctx);
+  assert.equal(e.audio.terminou, false);
+  let v = run({ cmd: 'escolherReuniao', id: 'r1' }, { cmd: 'mostrar', itemId: 'vid' }, { cmd: 'videoProgresso', inicio: 1, t: 1, dur: 60 }, { cmd: 'videoIr', t: 30 });
+  assert.equal(v.video.t, 30);
+  assert.equal(v.video.salto, 1);
 });

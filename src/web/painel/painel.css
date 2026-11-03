@@ -235,3 +235,114 @@ main > * { max-width: 1180px; margin-inline: auto; }
 .janela-op .amostra img { width: 100%; height: 100%; object-fit: contain; }
 .janela-op .nome { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 15px; overflow: hidden; }
 .janela-op .nome img { width: 20px; height: 20px; flex: none; }
+
+/* Tela de espera da reunião */
+.espera-amostra { display: grid !important; place-items: center; color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,.6); font-size: 15px; }
+.espera-mini { color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,.6); font-size: 20px; }
+.sub-titulo { margin: 6px 0 0; font-size: 16px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+
+/* Montar a reunião: Biblioteca primeiro, arquivos do computador embaixo */
+.adicionar-tit { margin: 0; font-size: 20px; }
+.de-fora { width: 100%; border-top: 1px solid var(--line); padding-top: 14px; display: grid; gap: 10px; justify-items: center; }
+.de-fora-tit { font-weight: 700; color: var(--muted); }
+
+/* Linhas ou quadros na Biblioteca */
+.troca-visao { display: flex; gap: 6px; justify-content: flex-end; }
+.troca-visao .btn.sel { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.grade.lista { grid-template-columns: 1fr; gap: 8px; }
+.grade.lista .arq { grid-template-columns: 112px minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 8px 10px; }
+.grade.lista .arq .miniatura { width: 112px; border-radius: 8px; font-size: 26px; }
+.grade.lista .arq .info { padding: 0; grid-template-columns: minmax(0, 1fr); }
+.grade.lista .arq .acoes { padding: 0; flex-wrap: nowrap; }
+.grade.lista .arq .cat-escolha { grid-template-columns: auto minmax(0, 260px); align-items: center; gap: 8px; }
+.grade.lista .arq.escolher { text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.grade.lista .arq.musica-arq .miniatura { width: 56px; aspect-ratio: 1; }
+.grade.lista .arq:has(.miniatura.musica) { grid-template-columns: 56px minmax(0, 1fr) auto; }
+.grade.lista .arq .miniatura.musica { width: 56px; aspect-ratio: 1; }
+
+/* Vídeo: a capa com um ▶ por cima */
+.miniatura .play { position: absolute; left: 50%; top: 50%; width: 34px; height: 34px; margin: -17px 0 0 -17px; border-radius: 50%; background: rgba(0,0,0,.6); color: #fff; font-size: 14px; display: grid; place-items: center; padding-left: 3px; box-sizing: border-box; pointer-events: none; }
+.arq .miniatura .play { width: 52px; height: 52px; margin: -26px 0 0 -26px; font-size: 20px; }
+.grade.lista .arq .miniatura .play { width: 34px; height: 34px; margin: -17px 0 0 -17px; font-size: 14px; }
+
+/* Biblioteca separada por dia */
+.dia { display: grid; gap: 10px; }
+.dia + .dia { margin-top: 18px; }
+.dia-nome { margin: 0; font-size: 16px; font-weight: 800; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+.dia-nome span { font-size: 13px; background: var(--surface-2); color: var(--muted); border-radius: 99px; padding: 1px 9px; }
+
+.fundo-op.fixo { cursor: default; }
+.fundo-op .nome-linha { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-right: 10px; }
+.fundo-op .nome-linha .btn { white-space: nowrap; flex: none; }
+
+/* ---------- Visual Clássico: azul-marinho, títulos com serifa, sem brilho ---------- */
+h1 { font-size: 36px; font-weight: 700; color: var(--navy); letter-spacing: 0; }
+h2 { font-weight: 700; color: var(--navy); letter-spacing: 0; }
+h3 { font-family: var(--font-titulo); font-weight: 700; color: var(--navy); }
+.marca b { font-family: var(--font-titulo); font-weight: 700; font-size: 28px; letter-spacing: 0; }
+.abas button { border-radius: 8px; color: #d5dbe8; }
+.abas button.sel { background: #2d3a5a; color: #ffffff; box-shadow: inset 3px 0 0 #e0424e; }
+.abas .depois-sep::before { background: #34426a; }
+.status { background: rgba(255, 255, 255, .05); }
+.st.ok .dot { background: var(--live-claro); box-shadow: none; }
+.st.atencao .dot { box-shadow: none; }
+.st.vivo .dot { animation: none; }
+.lado-btn { background: transparent; border-color: #4a5a82; }
+
+.btn { border-radius: 8px; }
+.btn.sm { min-height: 46px; }
+.btn .i { width: 22px; height: 22px; }
+.btn.danger { background: var(--surface); border-color: var(--line-2); color: var(--danger); }
+.btn.danger:not(:disabled):hover { background: var(--danger-bg); border-color: var(--danger); }
+.caixa { border-radius: 10px; box-shadow: none; }
+.reuniao { border: 1px solid var(--line); border-radius: 10px; box-shadow: none; }
+.reuniao.agora { border-color: var(--live); box-shadow: inset 4px 0 0 var(--live); }
+.quando .hora { font-family: var(--font-titulo); color: var(--navy); }
+
+/* Itens da reunião: uma lista branca com divisórias */
+.itens { gap: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.item { border: 0; border-bottom: 1px solid var(--line); border-radius: 0; box-shadow: none; padding: 12px 20px; }
+.item:last-child { border-bottom: 0; }
+.item.na-tv { background: var(--surface-2); box-shadow: inset 4px 0 0 var(--navy); }
+.item.arrastando { border-color: var(--navy); }
+.item .alca { color: var(--line-2); }
+.item .alca .i { width: 18px; height: 18px; }
+.item .acoes .btn { min-height: 42px; min-width: 42px; width: 42px; padding: 0; }
+.item .acoes .btn.danger { color: var(--danger); }
+.miniatura { border-radius: 4px; background: #e8ebf1; color: #4a5670; }
+.miniatura .i { width: 26px; height: 26px; }
+.miniatura.musica { background: #e8ebf1; }
+.miniatura .play .i { width: 14px; height: 14px; fill: currentColor; }
+.arq .miniatura .play .i { width: 22px; height: 22px; }
+.palco-musica > div .i { width: 64px; height: 64px; }
+.vazio .grande .i { width: 48px; height: 48px; }
+.adicionar { border: 1.5px dashed var(--line-2); border-radius: 10px; }
+
+/* Biblioteca e escolhas: marcado em azul-marinho */
+.arq { border: 1px solid var(--line); border-radius: 10px; box-shadow: none; }
+.arq.marcado { border-color: var(--navy); box-shadow: 0 0 0 2px var(--navy); }
+.arq input[type="text"] { border-color: var(--navy); }
+.sub-abas .btn.sel, .tipos .btn.sel, .troca-visao .btn.sel, .escolha .btn.sel, .trilha .btn.sel, .nums .btn.sel { background: var(--navy); border-color: var(--navy); color: var(--navy-ink); }
+.tipos .btn.sel .qt { color: var(--navy-ink); }
+.tipos .ic .i { width: 22px; height: 22px; vertical-align: -5px; }
+.fundo-op { border: 2px solid var(--line); }
+.fundo-op.sel { border-color: var(--navy); box-shadow: 0 0 0 2px var(--navy); }
+.janela-op:hover { border-color: var(--navy); }
+.campo input:focus { outline-color: var(--navy); }
+.campo input[type="date"], .campo input[type="time"], .campo input[type="text"] { border: 1.5px solid var(--line-2); border-radius: 8px; }
+.ajuda summary { color: var(--navy); }
+.sub-titulo { text-transform: none; letter-spacing: 0; font-weight: 600; }
+.dia-nome { font-weight: 700; }
+.janela { border-radius: 14px; }
+.janela > header h2 { font-size: 24px; }
+.soltar { background: rgba(31, 42, 68, .88); }
+.reserva iframe { border-color: var(--navy); }
+.pill.ok { background: var(--live-bg); }
+
+/* Passar na TV pelo notebook: o controle ocupa a tela toda do notebook */
+main > #aba-reserva { max-width: none; }
+#aba-reserva:not([hidden]) { height: calc(100vh - 70px); }
+.reserva { display: grid; grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); gap: 12px; height: 100%; }
+.reserva-cab { display: flex; align-items: baseline; gap: 18px; flex-wrap: wrap; }
+.reserva-cab .note { margin: 0; }
+.reserva iframe { width: 100%; height: 100%; min-height: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); }

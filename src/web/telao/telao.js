@@ -5,7 +5,7 @@
   const img = $('img');
   const video = $('video');
   const audio = $('audio');
-  let atualAudio = { arquivo: null, inicio: null };
+  let atualAudio = { arquivo: null, inicio: null, salto: 0 };
   let conexao;
   let atual = { camada: null, arquivo: null, inicio: null };
 
@@ -61,10 +61,14 @@
   function aplicar(msg) {
     const { estado, reuniao, info } = msg;
 
-    // Tela de espera (imagem da igreja ou a padrão)
+    // Tela de espera: a da reunião, a de Configurações ou a do programa (foto + logo + "Seja bem-vindo")
     const esperaImg = $('espera-img');
-    if (info.telaEspera) {
-      const src = conexao.midia(info.telaEspera);
+    const esp = info.espera;
+    const logo = $('espera-logo');
+    if (info.logo) { const s = '/logo.png?v=' + encodeURIComponent(info.logo); if (logo.dataset.src !== s) { logo.src = s; logo.dataset.src = s; } logo.hidden = false; }
+    else logo.hidden = true;
+    if (esp) {
+      const src = esp.arquivo ? conexao.midia(esp.arquivo) : esp.foto;
       if (esperaImg.dataset.src !== src) { esperaImg.src = src; esperaImg.dataset.src = src; }
       esperaImg.hidden = false; $('espera-padrao').hidden = true;
     } else {
@@ -118,13 +122,17 @@
       const src = conexao.midia(it.arquivo);
       const v = estado.video;
       if (atual.arquivo !== src || atual.inicio !== v.inicio) {
-        atual.arquivo = src; atual.inicio = v.inicio;
+        atual.arquivo = src; atual.inicio = v.inicio; atual.salto = v.salto || 0;
         if (video.dataset.src !== src) { video.src = src; video.dataset.src = src; }
         try { video.currentTime = 0; } catch (e) {}
         video.onloadeddata = () => mostrarCamada('video');
         if (video.readyState >= 2) mostrarCamada('video');
       } else if (atual.camada !== 'video') {
         mostrarCamada('video');
+      }
+      if ((v.salto || 0) !== (atual.salto || 0)) {
+        atual.salto = v.salto || 0;
+        try { video.currentTime = v.t; } catch (e) {}
       }
       if (v.tocando && video.paused && !video.ended) video.play().catch(() => {});
       if (!v.tocando && !video.paused) video.pause();
@@ -134,14 +142,19 @@
   function aplicarAudio(a, musica) {
     if (!a || !musica) {
       if (!audio.paused) audio.pause();
-      atualAudio = { arquivo: null, inicio: null };
+      atualAudio = { arquivo: null, inicio: null, salto: 0 };
       return;
     }
     const src = conexao.midia(musica.arquivo);
     if (atualAudio.arquivo !== src || atualAudio.inicio !== a.inicio) {
-      atualAudio = { arquivo: src, inicio: a.inicio };
+      atualAudio = { arquivo: src, inicio: a.inicio, salto: a.salto || 0 };
       if (audio.dataset.src !== src) { audio.src = src; audio.dataset.src = src; }
       try { audio.currentTime = 0; } catch (e) {}
+    }
+    if ((a.salto || 0) !== atualAudio.salto) {
+      // Adiantou ou voltou pela barrinha do celular.
+      atualAudio.salto = a.salto || 0;
+      try { audio.currentTime = a.t; } catch (e) {}
     }
     if (a.tocando && audio.paused && !audio.ended) audio.play().catch(() => {});
     if (!a.tocando && !audio.paused) audio.pause();

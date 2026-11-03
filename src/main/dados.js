@@ -14,9 +14,42 @@ const TIPOS_QUE_SE_REPETEM = ['musica', 'palavra'];
 const TIPOS_DA_SEMANA = ['imagem', 'video', 'pregacao'];
 const DIAS_PARA_ANTIGO = 7;
 const VERSOES = ['ACF', 'NVI'];
-/** Fundos de versículo que já vêm no programa (desenhados em src/web/comum/fundos.js). */
-const FUNDOS_PRONTOS = ['ceu', 'amanhecer', 'trigo', 'noite', 'oceano', 'pergaminho', 'vinho', 'floresta'];
+/** Fundos de versículo que já vêm no programa (desenhados em src/web/comum/versiculo.js; as fotos ficam em src/web/comum/fundos). */
+const FUNDOS_PRONTOS = ['ceu', 'amanhecer', 'trigo', 'noite', 'oceano', 'pergaminho', 'vinho', 'floresta',
+  'amanhecer-dourado',
+  'biblia-aberta',
+  'biblia-luz',
+  'deserto-judeia',
+  'cruz-paisagem',
+  'paisagem',
+  'getsemani',
+  'mar-galileia',
+  'monte-oliveiras',
+  'monte-sinai',
+  'rio-jordao',
+  'vale-jezreel',
+];
+/**
+ * Fotos de fundo que estavam na Biblioteca e passaram a vir no programa (marca do arquivo -> id).
+ * Quem já tinha a foto na Biblioteca passa a usar a do programa, sem ficar repetida.
+ */
+const FUNDOS_QUE_VIRARAM_PRONTOS = {
+  'd0b070102159d84930e6c0ffd5f90efd336e325d': 'amanhecer-dourado',
+  '688a20ccbbf334eef0b5add9151e81e6c1dce576': 'biblia-aberta',
+  '826ae1b4bc58716e91a5683378bec66f2f00a5d3': 'biblia-luz',
+  '8a7a445460b8bf789f9082c05fab0317ad30e743': 'deserto-judeia',
+  '2536872a4d1c3c3821caeaa129a5e52909414f2d': 'cruz-paisagem',
+  'cbb74207d8d053b34ae4dd30f2b38e71690fa0e9': 'paisagem',
+  '96779ad573d26434ba9de180bd2f8d727387a092': 'getsemani',
+  '2416bf8ff6ef6ca47ce55e1f0a7ed4dfe98abe47': 'mar-galileia',
+  '551576b28437e42d85c9b44c478dd391608c8da8': 'monte-oliveiras',
+  'ef112609f5bd54f572f1801df1061ddab8c65ddc': 'monte-sinai',
+  '9d3111de704f72b264a4788e1d2147a2c43c3c02': 'rio-jordao',
+  '715e04710331353d560d556907c4644f12728adb': 'vale-jezreel',
+};
 const FUNDO_PADRAO = 'ceu';
+/** Fundos do programa que são fotos (servem também de tela de espera). */
+const FOTOS_PRONTAS = new Set(FUNDOS_PRONTOS.slice(8));
 
 /**
  * "Impressão digital" do arquivo: tamanho + começo + fim do conteúdo.
@@ -102,13 +135,49 @@ class Dados {
     }
     d.recentes ??= {};
     if (juntarVersiculosNaPalavra(d)) { this.d = d; this.salvar(); }
+    this.d = d;
+    this._fundosQueViraramProntos();
     return d;
   }
 
+  /** Tira da Biblioteca as fotos de fundo que agora já vêm no programa; as reuniões passam a usar a do programa. */
+  _fundosQueViraramProntos() {
+    let mudou = false;
+    for (const b of this.d.biblioteca.filter(x => x.tipo === 'fundo')) {
+      const caminho = path.join(this.pastaMidia, b.arquivo);
+      let marca = b.marca;
+      if (!marca) { try { marca = marcaDoArquivo(caminho); } catch { continue; } }
+      const pronto = FUNDOS_QUE_VIRARAM_PRONTOS[marca];
+      if (!pronto) continue;
+      for (const r of this.d.reunioes) if (r.fundo === b.id) r.fundo = pronto;
+      this.d.biblioteca = this.d.biblioteca.filter(x => x.id !== b.id);
+      try { fs.unlinkSync(caminho); } catch {}
+      mudou = true;
+    }
+    if (mudou) this.salvar();
+  }
+
+  /**
+   * Grava em um arquivo temporário e troca pelo de verdade (se a energia cair no meio, o antigo fica inteiro).
+   * No Windows, antivírus ou backup às vezes seguram o arquivo por um instante: tenta de novo e,
+   * se não der, grava direto. Nunca deixa um erro de gravação parar a reunião.
+   */
   salvar() {
+    const json = JSON.stringify(this.d, null, 2);
     const tmp = this.arquivo + '.tmp';
-    fs.writeFileSync(tmp, JSON.stringify(this.d, null, 2));
-    fs.renameSync(tmp, this.arquivo);
+    for (let tentativa = 0; tentativa < 5; tentativa++) {
+      try {
+        fs.writeFileSync(tmp, json);
+        fs.renameSync(tmp, this.arquivo);
+        return;
+      } catch (e) {
+        this.ultimoErroAoSalvar = e;
+        const ate = Date.now() + 40 * (tentativa + 1);
+        while (Date.now() < ate) { /* espera um pouquinho */ }
+      }
+    }
+    try { fs.writeFileSync(this.arquivo, json); } catch (e) { this.ultimoErroAoSalvar = e; console.error('Não deu para salvar os dados:', e.message); }
+    try { fs.unlinkSync(tmp); } catch {}
   }
 
   get config() { return this.d.config; }
@@ -285,7 +354,7 @@ class Dados {
 
   /** Quantas reuniões usam este arquivo. */
   usos(bid) {
-    return this.d.reunioes.filter(r => r.fundo === bid || r.itens.some(i => i.bibliotecaId === bid)).length;
+    return this.d.reunioes.filter(r => r.fundo === bid || r.telaEspera === bid || r.itens.some(i => i.bibliotecaId === bid)).length;
   }
 
   /** Apaga o arquivo e o tira das reuniões que o usam. */
@@ -296,9 +365,30 @@ class Dados {
     for (const r of this.d.reunioes) {
       r.itens = r.itens.filter(i => i.bibliotecaId !== bid);
       if (r.fundo === bid) r.fundo = null;
+      if (r.telaEspera === bid) r.telaEspera = null;
     }
-    for (const a of b.arquivos || [b.arquivo]) fs.rmSync(path.join(this.pastaMidia, a), { force: true });
+    for (const a of [...(b.arquivos || [b.arquivo]), b.capa].filter(Boolean)) fs.rmSync(path.join(this.pastaMidia, a), { force: true });
     this.salvar();
+  }
+
+  // ---------- Imagem dos vídeos: o último quadro, o mesmo que fica parado na TV quando o vídeo acaba ----------
+
+  /** Vídeos que ainda não têm a imagem (ou têm a de antes, que não era do fim). O programa tira sozinho. */
+  videosSemCapa() {
+    return this.d.biblioteca.filter(b => b.tipo === 'video' && (!b.capa || b.capaDe !== 'fim'));
+  }
+
+  salvarCapaAutomatica(bid, jpg) {
+    const b = this.arquivoDaBiblioteca(bid);
+    if (!b || b.tipo !== 'video') return false;
+    const antiga = b.capa;
+    b.capa = 'capa-' + id() + '.jpg';
+    b.capaDe = 'fim';
+    delete b.capaEscolhida;
+    fs.writeFileSync(path.join(this.pastaMidia, b.capa), jpg);
+    this.salvar();
+    if (antiga) fs.rmSync(path.join(this.pastaMidia, antiga), { force: true });
+    return true;
   }
 
   /**
@@ -349,6 +439,7 @@ class Dados {
       }
       if (!r.nome) r.nome = origem.nome;
       if (!r.fundo) r.fundo = origem.fundo || null;
+      r.telaEspera = origem.telaEspera || null;
     }
     this.d.reunioes.push(r);
     this.salvar();
@@ -363,6 +454,7 @@ class Dados {
     if (campos.hora) r.hora = campos.hora;
     if ('pastorId' in campos) r.pastorId = campos.pastorId || null;
     if ('fundo' in campos) r.fundo = campos.fundo || null;
+    if ('telaEspera' in campos) r.telaEspera = campos.telaEspera || null;
     this.salvar();
   }
 
@@ -477,6 +569,7 @@ class Dados {
     const b = this.arquivoDaBiblioteca(it.bibliotecaId);
     if (!b) return null;
     const r = { id: it.id, bibliotecaId: b.id, tipo: b.tipo, titulo: b.titulo, arquivo: b.arquivo };
+    if (b.capa) r.capa = b.capa;
     if (b.arquivos) r.arquivos = [...b.arquivos];
     return r;
   }
@@ -491,7 +584,9 @@ class Dados {
       pastor: p ? p.nome : null,
       versao: p ? p.versao : 'ACF',
       fundo: this.fundo(r.fundo),
-      fundoId: r.fundo || FUNDO_PADRAO,
+      fundoId: this.fundoVale(r.fundo) ? r.fundo : this.fundoPadrao(),
+      telaEsperaId: r.telaEspera || null,
+      telaEspera: this.telaEspera(r.id),
       itens: r.itens.map(i => this._resolver(i)).filter(Boolean),
     };
   }
@@ -503,7 +598,36 @@ class Dados {
   fundo(fid) {
     const arq = fid && this.arquivoDaBiblioteca(fid);
     if (arq) return { arquivo: arq.arquivo };
-    return { pronto: FUNDOS_PRONTOS.includes(fid) ? fid : FUNDO_PADRAO };
+    return { pronto: this.fundoVale(fid) && FUNDOS_PRONTOS.includes(fid) ? fid : this.fundoPadrao() };
+  }
+
+  // ---------- Fundos do programa que vocês tiraram da lista ----------
+  get fundosEscondidos() { return this.d.config.fundosEscondidos || []; }
+
+  /** O fundo existe e não foi tirado (um do programa ou uma imagem da Biblioteca). */
+  fundoVale(fid) {
+    if (!fid) return false;
+    if (FUNDOS_PRONTOS.includes(fid)) return !this.fundosEscondidos.includes(fid);
+    return !!this.arquivoDaBiblioteca(fid);
+  }
+
+  /** O padrão é o Céu; se tiraram ele, o primeiro que sobrou. */
+  fundoPadrao() {
+    return FUNDOS_PRONTOS.find(f => !this.fundosEscondidos.includes(f)) || FUNDO_PADRAO;
+  }
+
+  /** Tira um fundo do programa da lista (o arquivo continua no programa; dá para trazer de volta). */
+  esconderFundo(fid) {
+    if (!FUNDOS_PRONTOS.includes(fid) || this.fundosEscondidos.includes(fid)) return false;
+    this.d.config.fundosEscondidos = [...this.fundosEscondidos, fid];
+    for (const r of this.d.reunioes) if (r.fundo === fid) r.fundo = null;
+    this.salvar();
+    return true;
+  }
+
+  mostrarFundosDoPrograma() {
+    this.d.config.fundosEscondidos = [];
+    this.salvar();
   }
 
   /** Lista de reuniões em ordem de dia e horário. */
@@ -517,6 +641,29 @@ class Dados {
   }
 
   // ---------- Tela de espera ----------
+
+  /**
+   * O que a TV mostra quando nada está passando:
+   * a escolhida na reunião (imagem da Biblioteca ou foto do programa) ou, se não tiver, a padrão
+   * (a imagem de Configurações ou, sem ela, a do programa: null).
+   */
+  telaEspera(rid) {
+    const r = rid && this.reuniao(rid);
+    const escolhida = r && r.telaEspera;
+    if (escolhida) {
+      const b = this.arquivoDaBiblioteca(escolhida);
+      if (b && (b.tipo === 'imagem' || b.tipo === 'fundo')) return { arquivo: b.arquivo, daReuniao: true };
+      if (FUNDOS_PRONTOS.includes(escolhida) && FOTOS_PRONTAS.has(escolhida)) return { foto: '/comum/fundos/' + escolhida + '.jpg', daReuniao: true };
+    }
+    return this.d.config.telaEspera ? { arquivo: this.d.config.telaEspera } : null;
+  }
+
+  voltarTelaEsperaDoPrograma() {
+    const antiga = this.d.config.telaEspera;
+    this.d.config.telaEspera = null;
+    this.salvar();
+    if (antiga) fs.rmSync(path.join(this.pastaMidia, antiga), { force: true });
+  }
 
   trocarTelaEspera(origem) {
     const antiga = this.d.config.telaEspera;

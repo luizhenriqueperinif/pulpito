@@ -6,49 +6,47 @@
 @font-face { font-family: "Plus Jakarta Sans"; font-weight: 700; font-display: swap; src: url("/fontes/plus-jakarta-sans/files/plus-jakarta-sans-latin-700-normal.woff2") format("woff2"); }
 @font-face { font-family: "Plus Jakarta Sans"; font-weight: 800; font-display: swap; src: url("/fontes/plus-jakarta-sans/files/plus-jakarta-sans-latin-800-normal.woff2") format("woff2"); }
 
+@font-face { font-family: "Source Serif 4"; font-weight: 600; font-display: swap; src: url("/fontes/source-serif-4/files/source-serif-4-latin-600-normal.woff2") format("woff2"); }
+@font-face { font-family: "Source Serif 4"; font-weight: 700; font-display: swap; src: url("/fontes/source-serif-4/files/source-serif-4-latin-700-normal.woff2") format("woff2"); }
+
 /*
- * Tema Universal: vermelho, branco e grafite.
- * Claro = "Universal Claro"; escuro = "Universal Noite". Segue o modo claro/escuro do aparelho.
- * O vermelho é a cor principal; por isso "apagar" e a lixeira são laranja (não confundir).
+ * Visual Clássico: papel claro, azul-marinho e títulos com serifa (como um hinário).
+ * O vermelho fica só no botão mais importante de cada tela. Sempre claro, de dia ou de noite.
  */
 :root {
-  --bg: #f4f5f7;
+  --bg: #f7f6f2;
   --surface: #ffffff;
-  --surface-2: #eef0f3;
-  --ink: #15171c;
-  --muted: #5b616d;
-  --line: #dfe2e8;
-  --accent: #d70a10;
-  --accent-soft: #fde7e8;
+  --surface-2: #eef1f7;
+  --ink: #1b2333;
+  --muted: #5b6478;
+  --line: #e3e1da;
+  --line-2: #d2d6df;
+  --navy: #1f2a44;
+  --navy-2: #2b3858;
+  --navy-ink: #ffffff;
+  --navy-muted: #b7c0d4;
+  --accent: #b3121f;
+  --accent-soft: #fbe9ea;
   --on-accent: #ffffff;
   --brand: #fe0000;
-  --live: #12805c;
-  --live-bg: #dcf5ea;
-  --warn: #8a5a00;
-  --warn-bg: #fff1cc;
-  --danger: #c2410c;
-  --danger-bg: #ffedd5;
-  /* menu lateral do notebook: sempre grafite */
-  --side: #1b1d22;
+  --live: #1c6b46;
+  --live-bg: #e7f2ec;
+  --live-claro: #9fd8b5;
+  --warn: #7a5200;
+  --warn-bg: #fff3d6;
+  --danger: #a1301b;
+  --danger-bg: #fbece8;
+  /* menu lateral do notebook: azul-marinho */
+  --side: var(--navy);
   --side-ink: #ffffff;
-  --side-muted: #a7abb4;
-  --side-hover: rgba(255, 255, 255, .07);
-  --shadow: 0 1px 2px rgba(21, 23, 28, .06), 0 8px 24px rgba(21, 23, 28, .07);
-  --font-ui: "Plus Jakarta Sans", "Atkinson Hyperlegible", "Segoe UI", Roboto, Arial, sans-serif;
-  --radius: 16px;
-  --radius-sm: 12px;
+  --side-muted: var(--navy-muted);
+  --side-hover: rgba(255, 255, 255, .08);
+  --shadow: 0 1px 2px rgba(27, 35, 51, .06);
+  --font-ui: "Plus Jakarta Sans", "Segoe UI", Roboto, Arial, sans-serif;
+  --font-titulo: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --radius: 12px;
+  --radius-sm: 10px;
   color-scheme: light;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0e0f12; --surface: #18191d; --surface-2: #212228; --ink: #f4f5f7; --muted: #a9adb6;
-    --line: #2e3037; --accent: #e3141b; --accent-soft: rgba(227, 20, 27, .16); --on-accent: #ffffff;
-    --live: #34d07f; --live-bg: rgba(52, 208, 127, .14);
-    --warn: #ffd27a; --warn-bg: rgba(255, 210, 122, .12); --danger: #fb923c; --danger-bg: rgba(251, 146, 60, .13);
-    --side: #08090b; --side-muted: #a4a8b1;
-    --shadow: 0 0 0 1px rgba(255, 255, 255, .03), 0 12px 32px rgba(0, 0, 0, .45);
-    color-scheme: dark;
-  }
 }
 
 * { box-sizing: border-box; }
@@ -60,18 +58,21 @@ button:disabled { opacity: .45; cursor: default; }
 [hidden] { display: none !important; }
 
 .btn {
-  min-height: 64px; border-radius: var(--radius-sm); border: 1.5px solid var(--line);
+  min-height: 64px; border-radius: var(--radius-sm); border: 1.5px solid var(--line-2);
   background: var(--surface); padding: 10px 16px; font-size: 19px; font-weight: 700;
   display: inline-flex; align-items: center; justify-content: center; gap: 8px; text-align: center;
   transition: background-color .15s, border-color .15s, box-shadow .15s;
 }
-.btn:not(:disabled):hover { border-color: color-mix(in srgb, var(--ink) 30%, var(--line)); }
-.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); box-shadow: 0 6px 18px color-mix(in srgb, var(--accent) 28%, transparent); }
-.btn.primary:not(:disabled):hover { border-color: var(--accent); filter: brightness(1.06); }
+.btn:not(:disabled):hover { border-color: var(--line-2); background: color-mix(in srgb, var(--surface-2) 60%, var(--surface)); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn.primary:not(:disabled):hover { border-color: var(--accent); background: #9c0f1a; }
 .btn.danger { border-color: transparent; color: var(--danger); background: var(--danger-bg); }
 .btn.live { border-color: var(--live); color: var(--live); background: var(--live-bg); }
 .btn.huge { min-height: 96px; font-size: 26px; }
-.eyebrow { font-size: 13px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.eyebrow { font-size: 15px; font-weight: 600; color: var(--muted); }
+.titulo, h1, h2 { font-family: var(--font-titulo); font-weight: 700; letter-spacing: 0; }
+/* Ícones de linha (no lugar dos emojis) */
+.i { width: 1.2em; height: 1.2em; flex: none; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; vertical-align: -0.22em; }
 .note { color: var(--muted); font-size: 15px; margin: 0; }
 
 /* Marca: logo da igreja (se tiver) ou a cruz do Púlpito */

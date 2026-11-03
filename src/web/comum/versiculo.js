@@ -10,15 +10,30 @@
     { id: 'pergaminho', nome: 'Pergaminho', css: 'radial-gradient(130% 100% at 50% 40%, #f7ecd2 0%, #e6d2a5 70%, #c9ad73 100%)', escuro: true },
     { id: 'vinho', nome: 'Vinho', css: 'linear-gradient(160deg, #3d0d18 0%, #7a1f33 60%, #a8443f 100%)', escuro: false },
     { id: 'floresta', nome: 'Floresta', css: 'linear-gradient(170deg, #0f2a1d 0%, #275c3a 60%, #6f9a55 100%)', escuro: false },
+    // Fotos que já vêm no programa (pasta src/web/comum/fundos).
+    { id: 'amanhecer-dourado', nome: 'Amanhecer dourado', foto: '/comum/fundos/amanhecer-dourado.jpg', escuro: false },
+    { id: 'biblia-aberta', nome: 'Bíblia aberta', foto: '/comum/fundos/biblia-aberta.jpg', escuro: false },
+    { id: 'biblia-luz', nome: 'Bíblia com luz', foto: '/comum/fundos/biblia-luz.jpg', escuro: false },
+    { id: 'deserto-judeia', nome: 'Deserto da Judeia', foto: '/comum/fundos/deserto-judeia.jpg', escuro: false },
+    { id: 'cruz-paisagem', nome: 'Cruz na paisagem', foto: '/comum/fundos/cruz-paisagem.jpg', escuro: false },
+    { id: 'paisagem', nome: 'Paisagem', foto: '/comum/fundos/paisagem.jpg', escuro: false },
+    { id: 'getsemani', nome: 'Jardim do Getsêmani', foto: '/comum/fundos/getsemani.jpg', escuro: false },
+    { id: 'mar-galileia', nome: 'Mar da Galileia', foto: '/comum/fundos/mar-galileia.jpg', escuro: false },
+    { id: 'monte-oliveiras', nome: 'Monte das Oliveiras', foto: '/comum/fundos/monte-oliveiras.jpg', escuro: false },
+    { id: 'monte-sinai', nome: 'Monte Sinai', foto: '/comum/fundos/monte-sinai.jpg', escuro: false },
+    { id: 'rio-jordao', nome: 'Rio Jordão', foto: '/comum/fundos/rio-jordao.jpg', escuro: false },
+    { id: 'vale-jezreel', nome: 'Vale de Jezreel', foto: '/comum/fundos/vale-jezreel.jpg', escuro: false },
   ];
+  // Foto de fundo com um véu escuro para o texto aparecer.
+  const comVeu = url => `linear-gradient(rgba(0,0,0,.38), rgba(0,0,0,.38)), url("${url}") center / cover no-repeat`;
 
   /** Estilo do fundo: { pronto: 'ceu' } ou { arquivo } (imagem da Biblioteca, com um véu escuro para o texto aparecer). */
   function estiloFundo(fundo, midia) {
     if (fundo && fundo.arquivo) {
-      return { bg: `linear-gradient(rgba(0,0,0,.38), rgba(0,0,0,.38)), url("${midia(fundo.arquivo)}") center / cover no-repeat`, escuro: false };
+      return { bg: comVeu(midia(fundo.arquivo)), escuro: false };
     }
     const f = FUNDOS.find(x => x.id === (fundo && fundo.pronto)) || FUNDOS[0];
-    return { bg: f.css, escuro: f.escuro };
+    return { bg: f.foto ? comVeu(f.foto) : f.css, escuro: f.escuro };
   }
 
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));

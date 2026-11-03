@@ -44,6 +44,13 @@ function ipLocal() {
   return candidatos[0]?.ip || '127.0.0.1';
 }
 
+/** Manda o arquivo; se a tela parar de pedir no meio (trocou de música/vídeo), fecha sem erro. */
+function mandar(leitura, res) {
+  leitura.on('error', () => res.destroy());
+  res.on('close', () => leitura.destroy());
+  leitura.pipe(res);
+}
+
 function enviarArquivo(req, res, arquivo) {
   fs.stat(arquivo, (err, st) => {
     if (err || !st.isFile()) { res.writeHead(404); res.end(); return; }
@@ -58,18 +65,18 @@ function enviarArquivo(req, res, arquivo) {
         'Content-Type': tipo, 'Accept-Ranges': 'bytes',
         'Content-Range': `bytes ${inicio}-${fim}/${st.size}`, 'Content-Length': fim - inicio + 1,
       });
-      fs.createReadStream(arquivo, { start: inicio, end: fim }).pipe(res);
+      mandar(fs.createReadStream(arquivo, { start: inicio, end: fim }), res);
       return;
     }
     res.writeHead(200, { 'Content-Type': tipo, 'Content-Length': st.size, 'Accept-Ranges': 'bytes', 'Cache-Control': 'no-cache' });
-    fs.createReadStream(arquivo).pipe(res);
+    mandar(fs.createReadStream(arquivo), res);
   });
 }
 
 /** Muda a cada vez que o programa abre: as páginas usam para saber que precisam recarregar. */
 const INICIO = Date.now().toString(36);
 
-function criarServidor({ dados }) {
+function criarServidor({ dados, janelas = null }) {
   const porta = dados.config.porta;
   const token = dados.config.token;
   let estado = estadoInicial();
@@ -234,6 +241,16 @@ function criarServidor({ dados }) {
       return;
     }
 
+    // "Você é o Púlpito?": uma página antiga do celular (de quando o notebook tinha outro endereço
+    // na rede) pergunta isso a cada endereço da rede até achar o notebook e se reconectar.
+    if (u.pathname === '/ola') {
+      const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Private-Network': 'true', 'Cache-Control': 'no-store' };
+      if (req.method === 'OPTIONS') { res.writeHead(204, { ...cors, 'Access-Control-Allow-Methods': 'GET' }); res.end(); return; }
+      res.writeHead(200, { ...cors, 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ pulpito: true, meu: u.searchParams.get('t') === token }));
+      return;
+    }
+
     if (partes[0] === 'api') {
       if (u.searchParams.get('t') !== token) { res.writeHead(403); res.end(); return; }
       if (partes[1] === 'enviar' && req.method === 'POST') { receberArquivo(req, res, u); return; }
@@ -291,15 +308,16 @@ function criarServidor({ dados }) {
       categorias: dados.categoriasMusica,
       pastores: dados.pastores.map(p => ({ id: p.id, nome: p.nome })),
       nomesReunioes: [...new Set(dados.reunioes.map(r => r.nome).filter(Boolean))].slice(-12),
-      biblioteca: dados.biblioteca.filter(b => b.tipo !== 'fundo').map(b => ({ id: b.id, tipo: b.tipo, titulo: b.titulo, arquivo: b.arquivo, qtd: b.arquivos ? b.arquivos.length : undefined })),
+      biblioteca: dados.biblioteca.filter(b => b.tipo !== 'fundo').map(b => ({ id: b.id, tipo: b.tipo, titulo: b.titulo, arquivo: b.arquivo, capa: b.capa || undefined, criadoEm: b.criadoEm, qtd: b.arquivos ? b.arquivos.length : undefined })),
       recentes: dados.recentes(reuniao?.pastorId).map(r => ({ ...r, rotulo: biblia.rotulo(r) })),
-      info: { inicio: INICIO, url, qrSvg, tv: tvStatus, telas, celulares: celularesConectados(), telaEspera: dados.config.telaEspera, logo: dados.config.logo || null },
+      info: { inicio: INICIO, url, qrSvg, tv: tvStatus, telas, celulares: celularesConectados(), telaEspera: dados.config.telaEspera, espera: dados.telaEspera(estado.reuniaoId), logo: dados.config.logo || null },
     };
     if (completo) {
       // Só o Painel precisa de tudo para preparar as reuniões.
       base.pastores = dados.pastores;
       base.biblioteca = dados.biblioteca.map(b => ({ ...b, usos: dados.usos(b.id) }));
       base.antigos = dados.antigos().map(b => b.id);
+      base.fundosEscondidos = dados.fundosEscondidos;
       base.reunioesCompletas = dados.reunioes.map(r => dados.reuniaoCompleta(r.id));
     }
     return JSON.stringify(base);
@@ -337,8 +355,12 @@ function criarServidor({ dados }) {
     removerCategoria: c => dados.removerCategoria(c.id),
     definirCategoria: c => dados.definirCategoria(c.id, c.categoria),
     removerDaBiblioteca: c => dados.removerDaBiblioteca(c.id),
+    esconderFundo: c => dados.esconderFundo(c.id),
+    mostrarFundosDoPrograma: () => dados.mostrarFundosDoPrograma(),
     apagarAntigos: () => dados.apagarAntigos(),
   };
+
+  const mandar = (ws, m) => { try { if (ws.readyState === 1) ws.send(JSON.stringify(m)); } catch {} };
 
   function executar(cmd, papel, ws) {
     if ((cmd.cmd === 'videoProgresso' || cmd.cmd === 'audioProgresso') && papel !== 'telao') return;
@@ -354,6 +376,19 @@ function criarServidor({ dados }) {
       const pastorId = dados.pastores.some(p => p.id === cmd.pastorId) ? cmd.pastorId : null;
       const r = dados.criarReuniao({ pastorId, nome: String(cmd.nome || '').replace(/\s+/g, ' ').trim().slice(0, 60), data: dados.hoje(), hora });
       executar({ cmd: 'escolherReuniao', id: r.id }, papel, ws);
+      return;
+    }
+    // Janelas do notebook: o celular pede a lista e aperta os botões da que está na TV.
+    if (cmd.cmd === 'pedirJanelas') {
+      if (papel === 'telao' || !janelas) return;
+      Promise.resolve().then(() => janelas.listar()).catch(() => []).then(lista => mandar(ws, { tipo: 'janelas', lista }));
+      return;
+    }
+    if (cmd.cmd === 'teclaJanela') {
+      if (papel === 'telao' || !janelas || estado.tv.tipo !== 'janela') return;
+      if (!['playPausa', 'voltar', 'avancar', 'telaCheia'].includes(cmd.acao)) return;
+      Promise.resolve().then(() => janelas.apertar(estado.tv.fonteId, estado.tv.nome, cmd.acao)).catch(() => 'erro')
+        .then(r => mandar(ws, { tipo: 'tecla', acao: cmd.acao, resultado: r }));
       return;
     }
     const preparo = PREPARO[cmd.cmd];
@@ -382,10 +417,13 @@ function criarServidor({ dados }) {
     ws.local = u.searchParams.get('local') === '1';
     ws.isAlive = true;
     ws.on('pong', () => { ws.isAlive = true; });
+    ws.on('error', () => {}); // celular que sumiu da rede: a conexão só fecha
     ws.on('message', raw => {
       let cmd;
       try { cmd = JSON.parse(raw); } catch { return; }
-      if (cmd && typeof cmd.cmd === 'string') executar(cmd, ws.papel, ws);
+      if (!cmd || typeof cmd.cmd !== 'string') return;
+      // Um comando com problema não pode derrubar nada: anota e segue a reunião.
+      try { executar(cmd, ws.papel, ws); } catch (e) { console.error(`Erro no comando "${cmd.cmd}":`, e); try { transmitir(); } catch {} }
     });
     ws.on('close', () => transmitir());
     transmitir();
@@ -399,7 +437,10 @@ function criarServidor({ dados }) {
       ws.ping();
     }
   }, 10000);
+  batimento.unref?.();
   wss.on('close', () => clearInterval(batimento));
+  wss.on('error', e => console.error('WebSocket:', e.message));
+  server.on('clientError', (_e, sock) => { try { sock.destroy(); } catch {} });
 
   async function atualizarEndereco() {
     url = `http://${ipLocal()}:${porta}/controle/?t=${token}`;
@@ -417,7 +458,7 @@ function criarServidor({ dados }) {
     atualizarEndereco,
     transmitir,
     definirTv(status, qtdTelas) { tvStatus = status; telas = qtdTelas || 1; transmitir(); },
-    fechar() { wss.close(); server.close(); },
+    fechar() { for (const c of wss.clients) c.terminate(); wss.close(); server.close(); },
   };
 }
 

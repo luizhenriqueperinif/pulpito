@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('notebook', {
   importarPregacaoArquivos: arquivos =>
     ipcRenderer.invoke('importar-pregacao', { caminhos: Array.from(arquivos, f => webUtils.getPathForFile(f)) }),
   trocarTelaEspera: () => ipcRenderer.invoke('trocar-tela-espera'),
+  telaEsperaDoPrograma: () => ipcRenderer.invoke('tela-espera-do-programa'),
   atualizarEndereco: () => ipcRenderer.invoke('atualizar-endereco'),
   trocarTelas: () => ipcRenderer.invoke('trocar-telas'),
   opcoes: () => ipcRenderer.invoke('opcoes'),
