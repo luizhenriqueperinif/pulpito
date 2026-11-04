@@ -13,7 +13,7 @@ const TIPOS_QUE_SE_REPETEM = ['musica', 'palavra'];
 /** Tipos que "Apagar antigos" pode limpar. Músicas e Fundos nunca são apagados por ele. */
 const TIPOS_DA_SEMANA = ['imagem', 'video', 'pregacao'];
 const DIAS_PARA_ANTIGO = 7;
-const VERSOES = ['ACF', 'NVI'];
+const VERSOES = ['ACF', 'ARC', 'NVI'];
 /** Fundos de versículo que já vêm no programa (desenhados em src/web/comum/versiculo.js; as fotos ficam em src/web/comum/fundos). */
 const FUNDOS_PRONTOS = ['ceu', 'amanhecer', 'trigo', 'noite', 'oceano', 'pergaminho', 'vinho', 'floresta',
   'amanhecer-dourado',
@@ -474,7 +474,7 @@ class Dados {
    * Versículo preparado. A reunião pode ter várias Palavras (a do dízimo, a da família...),
    * cada uma num lugar da reunião. Com palavraId entra nessa Palavra; sem, vira uma Palavra nova no fim.
    * nome: o que aparece no cartão ("Palavra do dízimo"). Vazio = "Palavra".
-   * @param {{ ref: {l,c,v}, ate?: number, versao?: 'ACF'|'NVI'|null, palavraId?: string, nome?: string }} v
+   * @param {{ ref: {l,c,v}, ate?: number, versao?: 'ACF'|'ARC'|'NVI'|null, palavraId?: string, nome?: string }} v
    * @returns a passagem criada
    */
   adicionarVersiculo(rid, { ref, ate, versao, palavraId, nome }) {

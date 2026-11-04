@@ -554,7 +554,7 @@
         ${textos && textos.length > 1 ? `<ol class="textos">${textos.map(t => `<li value="${t.v}">${esc(t.texto)}</li>`).join('')}</ol>` : ''}
       </div>` : '';
 
-    const opcoesVersao = [[null, `Do pastor (${r.versao})`], ['ACF', 'ACF'], ['NVI', 'NVI']];
+    const opcoesVersao = [[null, `Do pastor (${r.versao})`], ['ACF', 'ACF'], ['ARC', 'ARC'], ['NVI', 'NVI']];
     return `<div class="fundo-modal"><div class="janela" role="dialog" aria-label="Colocar versículo">${cab}
       <div class="corpo">
         <form id="form-verso" class="busca" autocomplete="off">
@@ -710,7 +710,7 @@
     const formPastor = f ? `<form class="caixa" id="form-pastor" autocomplete="off">
         <label class="campo"><span>Nome do pastor</span><input type="text" id="p-nome" value="${esc(f.nome)}" placeholder="Ex.: Pr. João" maxlength="40"></label>
         <div class="campo"><span>Bíblia preferida</span><div class="escolha">
-          ${['ACF', 'NVI'].map(v => `<button type="button" class="btn ${f.versao === v ? 'sel' : ''}" data-a="pastorVersao" data-v="${v}">${v}</button>`).join('')}</div></div>
+          ${['ACF', 'ARC', 'NVI'].map(v => `<button type="button" class="btn ${f.versao === v ? 'sel' : ''}" data-a="pastorVersao" data-v="${v}">${v}</button>`).join('')}</div></div>
         <div class="acoes"><button type="submit" class="btn primary">Salvar</button><button type="button" class="btn" data-a="cancelarPastor">Cancelar</button></div>
       </form>` : '';
     const pastores = M.pastores.map(p => `<div class="pastor">

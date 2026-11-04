@@ -1,9 +1,9 @@
-// Bíblia (ACF e NVI) guardada dentro do programa: funciona sem internet.
+// Bíblia (ACF, ARC e NVI) guardada dentro do programa: funciona sem internet.
 // Referência de um versículo: { l: índice do livro (0 a 65), c: capítulo (1...), v: versículo (1...) }.
 const fs = require('fs');
 const path = require('path');
 
-const VERSOES = ['ACF', 'NVI'];
+const VERSOES = ['ACF', 'ARC', 'NVI'];
 const PASTA = path.join(__dirname, '..', 'biblia');
 const cache = {};
 

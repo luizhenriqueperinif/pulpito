@@ -54,3 +54,12 @@ test('entende o que a pessoa digita', () => {
   assert.equal(interpretar('qualquer coisa', livros), null);
   assert.equal(interpretar('jo 3:16-10', livros), null);
 });
+
+test('ARC: texto próprio (não é a ACF) e numeração dela em 2 Coríntios 13', () => {
+  const biblia = require('../src/main/biblia');
+  assert.ok(biblia.VERSOES.includes('ARC'));
+  assert.equal(biblia.texto('ARC', { l: 0, c: 1, v: 1 }), 'No princípio, criou Deus os céus e a terra.');
+  assert.equal(biblia.texto('ACF', { l: 0, c: 1, v: 1 }), 'No princípio criou Deus o céu e a terra.');
+  assert.equal(biblia.qtdVersos('ARC', 46, 13), 13);
+  assert.equal(biblia.existe('ARC', { l: 65, c: 22, v: 21 }), true);
+});
