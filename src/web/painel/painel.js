@@ -791,6 +791,11 @@
         <div class="campo"><span>Esconder os avisos do Windows (e-mail, atualizações...) enquanto o programa está aberto</span>${simNao('esconderNotificacoes', o.esconderNotificacoes)}
           <p class="note">Ao fechar o programa, os avisos voltam como estavam.</p></div>
       </section>
+      <section class="caixa">
+        <h2>Som</h2>
+        <div class="campo"><span>Manter o som do notebook sempre ligado (evita o chiado na mesa de som quando fica um tempo em silêncio)</span>${simNao('manterSomAcordado', o.manterSomAcordado)}
+          <p class="note">O programa toca um som tão baixinho que ninguém ouve, só para o Windows não desligar a saída de som.</p></div>
+      </section>
       ${secaoContaTelegram()}
       <section class="caixa">
         <h2>Vídeos baixados no notebook</h2>

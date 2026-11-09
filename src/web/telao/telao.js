@@ -219,6 +219,25 @@
   video.addEventListener('timeupdate', () => progresso(false));
   video.addEventListener('ended', () => progresso(true));
 
+  // Som sempre "acordado": um tom grave de 10 Hz (abaixo do que o ouvido escuta e do que as
+  // caixas reproduzem), bem baixinho, toca sem parar. Assim o Windows não desliga a saída de som
+  // do notebook quando fica em silêncio — é esse desligar que faz a mesa de som começar a chiar.
+  let somAcordado = null;
+  window.manterSomAcordado = ligar => {
+    if (!ligar) { if (somAcordado) { somAcordado.close().catch(() => {}); somAcordado = null; } return; }
+    if (somAcordado) return;
+    try {
+      const ctx = new AudioContext();
+      const tom = ctx.createOscillator();
+      tom.frequency.value = 10;
+      const volume = ctx.createGain();
+      volume.gain.value = 0.002;
+      tom.connect(volume).connect(ctx.destination); tom.start();
+      ctx.resume().catch(() => {});
+      somAcordado = ctx;
+    } catch { somAcordado = null; }
+  };
+
   mostrarCamada('espera');
-  conexao = window.Auxilio.conectar({ papel: 'telao', aoReceber: m => m.tipo === 'estado' && aplicar(m), aoMudar: () => {} });
+  conexao =window.Auxilio.conectar({ papel: 'telao', aoReceber: m => m.tipo === 'estado' && aplicar(m), aoMudar: () => {} });
 })();

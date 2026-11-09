@@ -70,6 +70,12 @@ function moverPainelParaFora(tv) {
   if (maximizado) painel.maximize();
 }
 
+/** Liga ou desliga o "som acordado" no telão (opção do painel; vem ligada). */
+function aplicarSomAcordado() {
+  if (!telao || telao.isDestroyed()) return;
+  telao.webContents.executeJavaScript(`window.manterSomAcordado?.(${dados.config.manterSomAcordado !== false})`).catch(() => {});
+}
+
 function abrirTelao() {
   if (telao && !telao.isDestroyed()) telao.destroy();
   if (TESTE) return abrirTelaoDeTeste();
@@ -93,6 +99,7 @@ function abrirTelao() {
   if (tv) telao.setAlwaysOnTop(true, 'screen-saver');
   telao.once('ready-to-show', () => { telao.showInactive(); if (tv) telao.setFullScreen(true); });
   telao.loadURL(urlLocal('telao'));
+  telao.webContents.on('did-finish-load', aplicarSomAcordado);
   telao.on('closed', () => { telao = null; });
   moverPainelParaFora(tv);
   servidor.definirTv(tv ? 'tv' : 'janela', screen.getAllDisplays().length);
@@ -111,6 +118,7 @@ function abrirTelaoDeTeste() {
   telao.setAspectRatio(16 / 9);
   telao.once('ready-to-show', () => telao.showInactive());
   telao.loadURL(urlLocal('telao'));
+  telao.webContents.on('did-finish-load', aplicarSomAcordado);
   telao.on('closed', () => { telao = null; });
   servidor.definirTv('janela', screen.getAllDisplays().length);
 }
@@ -325,6 +333,7 @@ ipcMain.handle('opcoes', () => ({
   instalado: app.isPackaged,
   iniciarComWindows: dados.config.iniciarComWindows !== false,
   esconderNotificacoes: dados.config.esconderNotificacoes !== false,
+  manterSomAcordado: dados.config.manterSomAcordado !== false,
   pastaTelegram: pastaTelegram(),
   pastaTelegramPadrao: !dados.config.pastaTelegram,
   pastaTelegramExiste: fs.existsSync(pastaTelegram()),
@@ -380,6 +389,11 @@ ipcMain.handle('mudar-opcao', (_e, { nome, valor } = {}) => {
     dados.config.iniciarComWindows = !!valor;
     dados.salvar();
     aplicarIniciarComWindows();
+  }
+  if (nome === 'manterSomAcordado') {
+    dados.config.manterSomAcordado = !!valor;
+    dados.salvar();
+    aplicarSomAcordado();
   }
   if (nome === 'pastaTelegramPadrao') {
     delete dados.config.pastaTelegram;
