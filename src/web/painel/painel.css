@@ -379,3 +379,5 @@ main > #aba-reserva { max-width: none; }
 @container (max-width: 1000px) {
   .tipos .nm { white-space: normal; text-align: center; line-height: 1.15; }
 }
+
+.pasta-tg { overflow-wrap: anywhere; font-size: 15px; font-weight: 600; margin: 4px 0 6px; }

@@ -6,6 +6,7 @@ const { execFile, execFileSync } = require('child_process');
 const { Dados, EXT_IMAGEM, EXT_VIDEO, EXT_AUDIO, tipoDoArquivo } = require('./dados');
 const { criarServidor } = require('./servidor');
 const { criarTeclas } = require('./teclas');
+const tg = require('./telegram');
 
 // Os dados ficam sempre na mesma pasta, rodando pelo código (npm start) ou instalado (.exe).
 app.setPath('userData', path.join(app.getPath('appData'), 'auxilio-reuniao'));
@@ -323,13 +324,32 @@ ipcMain.handle('opcoes', () => ({
   instalado: app.isPackaged,
   iniciarComWindows: dados.config.iniciarComWindows !== false,
   esconderNotificacoes: dados.config.esconderNotificacoes !== false,
+  pastaTelegram: pastaTelegram(),
+  pastaTelegramPadrao: !dados.config.pastaTelegram,
+  pastaTelegramExiste: fs.existsSync(pastaTelegram()),
 }));
+
+ipcMain.handle('escolher-pasta-telegram', async () => {
+  const r = await dialog.showOpenDialog(painel, {
+    title: 'Escolha a pasta onde o Telegram salva os vídeos',
+    defaultPath: fs.existsSync(pastaTelegram()) ? pastaTelegram() : app.getPath('downloads'),
+    properties: ['openDirectory'],
+  });
+  if (r.canceled || !r.filePaths[0]) return false;
+  dados.config.pastaTelegram = r.filePaths[0];
+  dados.salvar();
+  return true;
+});
 
 ipcMain.handle('mudar-opcao', (_e, { nome, valor } = {}) => {
   if (nome === 'iniciarComWindows') {
     dados.config.iniciarComWindows = !!valor;
     dados.salvar();
     aplicarIniciarComWindows();
+  }
+  if (nome === 'pastaTelegramPadrao') {
+    delete dados.config.pastaTelegram;
+    dados.salvar();
   }
   if (nome === 'esconderNotificacoes') {
     dados.config.esconderNotificacoes = !!valor;
@@ -365,12 +385,24 @@ function tirarQuadro(url) {
 
 let tirandoCapas = false;
 const capaNaoDeu = new Set();   // vídeo que o programa não conseguiu abrir: não tenta de novo nesta vez
+// Vídeos do Telegram: a pasta onde o Telegram Desktop salva o que o pastor baixa.
+const pastaTelegram = () => dados.config.pastaTelegram || path.join(app.getPath('downloads'), 'Telegram Desktop');
+const pastaCapasTelegram = () => path.join(dados.pasta, 'capas-telegram');
+function telegramSemCapa() {
+  const pasta = pastaCapasTelegram();
+  return tg.listarVideos(pastaTelegram(), { limite: 20 })
+    .map(v => ({ ...v, capa: tg.nomeDaCapa(v) }))
+    .filter(v => !capaNaoDeu.has('tg:' + v.capa) && !fs.existsSync(path.join(pasta, v.capa)));
+}
+
 async function tirarCapas() {
   if (tirandoCapas || !dados || !servidor) return;
   const lista = dados.videosSemCapa().filter(b => !capaNaoDeu.has(b.id));
-  if (!lista.length) return;
+  const doTelegram = telegramSemCapa();
+  if (!lista.length && !doTelegram.length) return;
   tirandoCapas = true;
   let mudou = false;
+  let mudouTelegram = false;
   const w = new BrowserWindow({ show: false, width: 640, height: 360, webPreferences: { offscreen: true, backgroundThrottling: false } });
   try {
     await w.loadURL(`http://127.0.0.1:${dados.config.porta}/comum/capa.html`);
@@ -381,6 +413,15 @@ async function tirarCapas() {
         mudou = dados.salvarCapaAutomatica(b.id, Buffer.from(foto.split(',')[1], 'base64')) || mudou;
       } else capaNaoDeu.add(b.id);
     }
+    const t = encodeURIComponent(dados.config.token);
+    for (const v of doTelegram) {
+      const foto = await w.webContents.executeJavaScript(`(${tirarQuadro.toString()})(${JSON.stringify(`/telegram/${encodeURIComponent(v.nome)}?t=${t}`)})`).catch(() => null);
+      if (typeof foto === 'string' && foto.startsWith('data:image/jpeg') && foto.length > 2000) {
+        fs.mkdirSync(pastaCapasTelegram(), { recursive: true });
+        fs.writeFileSync(path.join(pastaCapasTelegram(), v.capa), Buffer.from(foto.split(',')[1], 'base64'));
+        mudouTelegram = true;
+      } else capaNaoDeu.add('tg:' + v.capa);
+    }
   } catch (e) {
     anotarErro('Capa do vídeo', e);
   } finally {
@@ -388,6 +429,7 @@ async function tirarCapas() {
     tirandoCapas = false;
   }
   if (mudou) servidor.transmitir();
+  if (mudouTelegram) servidor.avisarTelegram();
 }
 
 app.on('second-instance', () => { if (painel) { if (painel.isMinimized()) painel.restore(); painel.focus(); } });
@@ -395,7 +437,11 @@ app.on('second-instance', () => { if (painel) { if (painel.isMinimized()) painel
 app.whenReady().then(async () => {
   if (!primeiraCopia) return;
   dados = new Dados(path.join(app.getPath('userData'), 'dados'));
-  servidor = criarServidor({ dados, janelas: { listar: () => listarJanelas(true), apertar: teclas.apertar } });
+  servidor = criarServidor({
+    dados,
+    janelas: { listar: () => listarJanelas(true), apertar: teclas.apertar },
+    telegram: { pasta: pastaTelegram, pastaCapas: pastaCapasTelegram, aoPedir: () => setTimeout(tirarCapas, 300) },
+  });
   try {
     await servidor.iniciar();
   } catch (e) {

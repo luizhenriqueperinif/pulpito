@@ -790,6 +790,16 @@
           ${o.instalado ? '' : '<p class="note">Vale só depois de instalar pelo instalador (.exe).</p>'}</div>
         <div class="campo"><span>Esconder os avisos do Windows (e-mail, atualizações...) enquanto o programa está aberto</span>${simNao('esconderNotificacoes', o.esconderNotificacoes)}
           <p class="note">Ao fechar o programa, os avisos voltam como estavam.</p></div>
+      </section>
+      <section class="caixa">
+        <h2>Vídeos do Telegram</h2>
+        <p class="note">Os vídeos que você baixa no Telegram do notebook aparecem no celular, em "Vídeos do Telegram".
+          Ao tocar num deles, ele entra na reunião e passa na TV.</p>
+        <div class="campo"><span>Pasta onde o Telegram salva os vídeos</span>
+          <div class="t-grande pasta-tg">${esc(o.pastaTelegram)}</div>
+          ${o.pastaTelegramExiste ? '' : '<p class="note">Essa pasta ainda não existe. Ela aparece quando você baixar o primeiro vídeo no Telegram.</p>'}
+          <div class="acoes"><button class="btn sm" data-a="pastaTelegram">${I('procurar')} Escolher outra pasta</button>
+            ${o.pastaTelegramPadrao ? '' : '<button class="btn sm" data-a="opcao" data-v="pastaTelegramPadrao" data-sim="1">Voltar para a pasta normal</button>'}</div></div>
       </section>`;
   }
 
@@ -988,6 +998,7 @@
       if (r && r.erro) avisar(r.erro); else if (r && r.ok) avisar('Logo colocada.');
     },
     tirarLogo: async () => { await window.notebook.tirarLogo(); avisar('Logo tirada. Voltou a cruz do Púlpito.'); },
+    pastaTelegram: async () => { if (await window.notebook.escolherPastaTelegram()) { avisar('Pasta do Telegram trocada.'); carregarOpcoes(); } },
     opcao: async (nome, el) => {
       await window.notebook.mudarOpcao(nome, el.dataset.sim === '1');
       carregarOpcoes();

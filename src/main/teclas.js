@@ -7,13 +7,18 @@ const path = require('path');
 // Códigos das teclas no Windows
 const VK = { espaco: 0x20, esquerda: 0x25, direita: 0x27, j: 0x4a, k: 0x4b, l: 0x4c, f: 0x46 };
 
-/** Qual tecla apertar para cada botão do celular. No YouTube: K, J e L (10 segundos); nos outros: espaço e setas. */
+/** Janela do Telegram (o visualizador do Telegram Desktop ou o Telegram Web no navegador):
+ * lá as setas trocam para o vídeo seguinte da conversa em vez de adiantar, então só dá para tocar e pausar. */
+const ehTelegram = nome => /telegram|media viewer|visualizador de m[ií]dia/i.test(nome || '');
+
+/** Qual tecla apertar para cada botão do celular. No YouTube: K, J e L (10 segundos); no Telegram: só espaço; nos outros: espaço e setas. */
 function teclaPara(acao, nomeJanela) {
   const yt = /youtube/i.test(nomeJanela || '');
+  const tg = !yt && ehTelegram(nomeJanela);
   switch (acao) {
     case 'playPausa': return yt ? VK.k : VK.espaco;
-    case 'voltar': return yt ? VK.j : VK.esquerda;
-    case 'avancar': return yt ? VK.l : VK.direita;
+    case 'voltar': return tg ? null : yt ? VK.j : VK.esquerda;
+    case 'avancar': return tg ? null : yt ? VK.l : VK.direita;
     case 'telaCheia': return VK.f;
     default: return null;
   }
@@ -97,4 +102,4 @@ function criarTeclas() {
   return { apertar, fechar() { if (ps) { try { ps.kill(); } catch {} ps = null; } } };
 }
 
-module.exports = { criarTeclas, teclaPara, numeroDaJanela };
+module.exports = { criarTeclas, teclaPara, numeroDaJanela, ehTelegram };

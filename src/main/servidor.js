@@ -8,6 +8,7 @@ const { WebSocketServer } = require('ws');
 const QRCode = require('qrcode');
 const { estadoInicial, aplicar } = require('./conducao');
 const biblia = require('./biblia');
+const tg = require('./telegram');
 
 const RAIZ = path.join(__dirname, '..', '..');
 const PASTAS_ESTATICAS = {
@@ -76,7 +77,7 @@ function enviarArquivo(req, res, arquivo) {
 /** Muda a cada vez que o programa abre: as páginas usam para saber que precisam recarregar. */
 const INICIO = Date.now().toString(36);
 
-function criarServidor({ dados, janelas = null }) {
+function criarServidor({ dados, janelas = null, telegram = null }) {
   const porta = dados.config.porta;
   const token = dados.config.token;
   let estado = estadoInicial();
@@ -271,6 +272,18 @@ function criarServidor({ dados, janelas = null }) {
       return;
     }
 
+    // Vídeos da pasta do Telegram (e as imagens deles), para o celular e para tirar a imagem.
+    if (partes[0] === 'telegram' || partes[0] === 'telegram-capa') {
+      if (u.searchParams.get('t') !== token || !telegram) { res.writeHead(403); res.end(); return; }
+      const nome = decodeURIComponent(partes[1] || '');
+      const arquivo = partes[0] === 'telegram'
+        ? tg.caminhoDoVideo(telegram.pasta(), nome)
+        : (/^[0-9a-f]{20}.jpg$/.test(nome) ? path.join(telegram.pastaCapas(), nome) : null);
+      if (!arquivo) { res.writeHead(404); res.end(); return; }
+      enviarArquivo(req, res, arquivo);
+      return;
+    }
+
     if (partes[0] === 'midia') {
       if (u.searchParams.get('t') !== token) { res.writeHead(403); res.end(); return; }
       const nome = path.basename(decodeURIComponent(partes[1] || ''));
@@ -390,6 +403,33 @@ function criarServidor({ dados, janelas = null }) {
       Promise.resolve().then(() => janelas.listar()).catch(() => []).then(lista => mandar(ws, { tipo: 'janelas', lista }));
       return;
     }
+    // Vídeos do Telegram: a lista (com a imagem de cada um, quando já tiver) e colocar um na TV.
+    if (cmd.cmd === 'pedirTelegram') {
+      if (papel === 'telao' || !telegram) return;
+      const pasta = telegram.pasta();
+      const r = estado.reuniaoId && dados.reuniao(estado.reuniaoId);
+      const naReuniao = new Set(r ? r.itens.map(i => dados.arquivoDaBiblioteca(i.bibliotecaId)?.origem).filter(Boolean) : []);
+      const lista = tg.listarVideos(pasta).map(v => {
+        const capa = tg.nomeDaCapa(v);
+        return { ...v, capa: fs.existsSync(path.join(telegram.pastaCapas(), capa)) ? capa : null, naReuniao: naReuniao.has(v.nome) };
+      });
+      mandar(ws, { tipo: 'telegram', pasta, existe: fs.existsSync(pasta), lista });
+      if (telegram.aoPedir) telegram.aoPedir();
+      return;
+    }
+    if (cmd.cmd === 'colocarTelegram') {
+      if (papel === 'telao' || !telegram || !estado.reuniaoId) return;
+      const caminho = tg.caminhoDoVideo(telegram.pasta(), cmd.nome);
+      if (!caminho) { mandar(ws, { tipo: 'telegramSumiu', nome: cmd.nome }); return; }
+      const r = dados.importarArquivos([caminho]);
+      const b = r.novos[0] || r.repetidos[0];
+      if (!b) return;
+      if (!b.origem) dados.anotarOrigem(b.id, path.basename(caminho));
+      dados.adicionarItens(estado.reuniaoId, [b.id], { semRepetir: true });
+      const item = dados.reuniao(estado.reuniaoId).itens.find(i => i.bibliotecaId === b.id);
+      executar({ cmd: 'mostrar', itemId: item.id }, papel, ws);
+      return;
+    }
     if (cmd.cmd === 'teclaJanela') {
       if (papel === 'telao' || !janelas || estado.tv.tipo !== 'janela') return;
       if (!['playPausa', 'voltar', 'avancar', 'telaCheia'].includes(cmd.acao)) return;
@@ -463,6 +503,8 @@ function criarServidor({ dados, janelas = null }) {
     }),
     atualizarEndereco,
     transmitir,
+    /** Chegou imagem nova de vídeo do Telegram: o celular que está com a lista aberta pede de novo. */
+    avisarTelegram() { for (const c of wss.clients) if (c.papel === 'controle') mandar(c, { tipo: 'telegramMudou' }); },
     definirTv(status, qtdTelas) { tvStatus = status; telas = qtdTelas || 1; transmitir(); },
     fechar() { for (const c of wss.clients) c.terminate(); wss.close(); server.close(); },
   };

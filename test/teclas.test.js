@@ -13,9 +13,12 @@ test('teclas da janela: no YouTube K, J e L; nos outros espaço e setas', () => 
   assert.equal(teclaPara('playPausa', yt), 0x4b);
   assert.equal(teclaPara('voltar', yt), 0x4a);
   assert.equal(teclaPara('avancar', yt), 0x4c);
-  assert.equal(teclaPara('playPausa', 'Telegram'), 0x20);
-  assert.equal(teclaPara('voltar', 'Telegram'), 0x25);
-  assert.equal(teclaPara('avancar', 'Telegram'), 0x27);
+  // Telegram: as setas trocam de vídeo, então só tocar/pausar.
+  assert.equal(teclaPara('playPausa', 'Media viewer'), 0x20);
+  assert.equal(teclaPara('voltar', 'Media viewer'), null);
+  assert.equal(teclaPara('avancar', 'Telegram Web - Google Chrome'), null);
+  assert.equal(teclaPara('voltar', 'Culto - VLC'), 0x25);
+  assert.equal(teclaPara('avancar', 'Culto - VLC'), 0x27);
   assert.equal(teclaPara('apagarTudo', yt), null);
   assert.equal(numeroDaJanela('window:460550:0'), '460550');
   assert.equal(numeroDaJanela('screen:0:0'), null);

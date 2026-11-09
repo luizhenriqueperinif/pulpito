@@ -19,4 +19,5 @@ contextBridge.exposeInMainWorld('notebook', {
   tirarLogo: () => ipcRenderer.invoke('tirar-logo'),
   mudarOpcao: (nome, valor) => ipcRenderer.invoke('mudar-opcao', { nome, valor }),
   listarJanelas: () => ipcRenderer.invoke('listar-janelas'),
+  escolherPastaTelegram: () => ipcRenderer.invoke('escolher-pasta-telegram'),
 });

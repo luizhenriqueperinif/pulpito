@@ -19,6 +19,8 @@
   let escolhendoBib = null;    // colocar da Biblioteca na reunião: { aba, sel: [ids na ordem marcada] }
   let novaReuniao = null;      // criando reunião pelo celular: { pastorId, nome }
   let escolhendoJanela = null; // lista das janelas abertas no notebook: { lista: null (carregando) | [...] }
+  let telegram = null;         // vídeos baixados no Telegram do notebook: { lista: null (carregando) | [...], existe, aviso }
+  let relogioTelegram = null;
   let avisoTecla = '';          // quando o botão da janela não funcionou
   let arrastando = null;       // 'a' ou 'v' enquanto o dedo arrasta a barrinha
   let chaveTela = '';          // para não redesenhar tudo só porque o tempo do vídeo andou
@@ -30,6 +32,9 @@
     aoReceber: m => {
       if (m.tipo === 'estado') { dados = m; desenhar(); }
       else if (m.tipo === 'janelas' && escolhendoJanela) { escolhendoJanela.lista = m.lista || []; desenhar(true); }
+      else if (m.tipo === 'telegram' && telegram) { telegram.lista = m.lista || []; telegram.existe = m.existe; desenhar(true); }
+      else if (m.tipo === 'telegramMudou' && telegram) enviar({ cmd: 'pedirTelegram' });
+      else if (m.tipo === 'telegramSumiu' && telegram) { telegram.aviso = 'Esse vídeo não está mais no notebook. Baixe de novo no Telegram.'; enviar({ cmd: 'pedirTelegram' }); desenhar(true); }
       else if (m.tipo === 'tecla') {
         avisoTecla = m.resultado === 'ok' ? ''
           : m.resultado === 'fechada' ? 'Essa janela foi fechada no notebook.'
@@ -231,13 +236,20 @@
     const e = dados.estado;
     if (e.tv.tipo !== 'janela') return '';
     const yt = /youtube/i.test(e.tv.nome || '');
+    // No Telegram as setas trocam de vídeo: lá só tocar e pausar.
+    const tg = !yt && /telegram|media viewer|visualizador de m[ií]dia/i.test(e.tv.nome || '');
+    const nome = /^media viewer$/i.test(e.tv.nome || '') ? 'Vídeo do Telegram' : e.tv.nome;
     return `<section class="jan-ctrl" aria-label="Mexer na janela do notebook">
-      <div class="jan-tit">${I('janela')}<span><small>Na TV: janela do notebook</small><b>${esc(e.tv.nome)}</b></span></div>
-      <div class="jan-botoes">
+      <div class="jan-tit">${I('janela')}<span><small>Na TV: janela do notebook</small><b>${esc(nome)}</b></span></div>
+      ${tg ? `<div class="jan-botoes so-um">
+        <button class="btn primary" data-acao="tecla" data-v="playPausa"><span class="pp">${I('play')}${I('pause')}</span><small>Tocar / Pausar</small></button>
+      </div>
+      <p class="note">Para adiantar e voltar, baixe o vídeo no Telegram e use "Vídeos do Telegram" aqui no celular.</p>`
+      : `<div class="jan-botoes">
         <button class="btn" data-acao="tecla" data-v="voltar">${I('voltar10')}<small>Voltar${yt ? ' 10s' : ''}</small></button>
         <button class="btn primary" data-acao="tecla" data-v="playPausa"><span class="pp">${I('play')}${I('pause')}</span><small>Tocar / Pausar</small></button>
         <button class="btn" data-acao="tecla" data-v="avancar">${I('avancar10')}<small>Adiantar${yt ? ' 10s' : ''}</small></button>
-      </div>
+      </div>`}
       ${avisoTecla ? `<div class="aviso">${esc(avisoTecla)}</div>` : ''}
       <div class="jan-mais">
         ${yt ? `<button class="btn" data-acao="tecla" data-v="telaCheia">${I('tv')} Tela cheia</button>` : ''}
@@ -253,7 +265,7 @@
     const corpo = !l ? '<p class="note">Procurando as janelas abertas no notebook…</p>'
       : !l.length ? '<p class="note">Nenhuma janela aberta no notebook. Abra o vídeo (no navegador ou no Telegram) no notebook e toque em Procurar de novo.</p>'
       : `<div class="janelas-cel">${l.map((j, i) => `<button class="janela-cel" data-acao="escolherJanela" data-n="${i}">
-          <img src="${j.miniatura}" alt=""><span>${esc(j.nome)}</span></button>`).join('')}</div>`;
+          <img src="${j.miniatura}" alt=""><span>${esc(/^media viewer$/i.test(j.nome) ? "Vídeo do Telegram" : j.nome)}</span></button>`).join('')}</div>`;
     return `<div class="painel" role="dialog" aria-label="Mostrar janela do notebook">
       <div class="painel-topo"><h2>Qual janela vai para a TV?</h2><button class="btn" data-acao="fecharJanelas">${I('fechar')} Fechar</button></div>
       <div class="painel-corpo" data-scroll="janelas">
@@ -263,12 +275,44 @@
       </div></div>`;
   }
 
+  // Vídeos que o pastor baixou no Telegram do notebook: toca um e ele vai para a reunião e para a TV.
+  const quando = ms => {
+    const d = new Date(ms), hoje = new Date();
+    const hora = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    const ontem = new Date(hoje); ontem.setDate(hoje.getDate() - 1);
+    if (d.toDateString() === hoje.toDateString()) return 'Hoje, ' + hora;
+    if (d.toDateString() === ontem.toDateString()) return 'Ontem, ' + hora;
+    return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + ', ' + hora;
+  };
+  const tamanho = b => b >= 1024 * 1024 * 1024 ? (b / 1024 / 1024 / 1024).toFixed(1).replace('.', ',') + ' GB' : Math.max(1, Math.round(b / 1024 / 1024)) + ' MB';
+  function telaTelegram() {
+    const l = telegram.lista, t = encodeURIComponent(conexao.token);
+    const comoBaixar = '<p class="note">No Telegram do notebook, abra a conversa, toque na setinha do vídeo para baixar e espere terminar. Ele aparece aqui sozinho.</p>';
+    const corpo = !l ? '<p class="note">Procurando os vídeos do Telegram no notebook…</p>'
+      : !l.length ? `<div class="tg-vazio">${I('video')}<p><strong>Nenhum vídeo baixado ainda.</strong></p>${comoBaixar}</div>`
+      : `<div class="janelas-cel">${l.map((v, i) => `<button class="janela-cel tg-video" data-acao="colocarTelegram" data-n="${i}">
+          ${v.capa ? `<img src="/telegram-capa/${encodeURIComponent(v.capa)}?t=${t}" alt="">` : `<div class="tg-sem-capa">${I('video')}</div>`}
+          <span class="tg-info"><span class="tg-nome">${esc(v.nome)}</span>
+            <small>${quando(v.quando)} · ${tamanho(v.tamanho)}</small>
+            ${v.naReuniao ? '<small class="tg-ja">Já está na reunião</small>' : ''}</span></button>`).join('')}</div>`;
+    return `<div class="painel" role="dialog" aria-label="Vídeos do Telegram">
+      <div class="painel-topo"><h2>Vídeos do Telegram</h2><button class="btn" data-acao="fecharTelegram">${I('fechar')} Fechar</button></div>
+      <div class="painel-corpo" data-scroll="telegram">
+        ${telegram.aviso ? `<div class="aviso">${esc(telegram.aviso)}</div>` : ''}
+        ${l && l.length ? '<p class="note">Toque no vídeo para colocar na reunião e passar na TV.</p>' : ''}
+        ${corpo}
+        ${l && l.length ? comoBaixar : ''}
+      </div></div>`;
+  }
+  function fecharTelegram() { telegram = null; clearInterval(relogioTelegram); relogioTelegram = null; }
+
   function listaReuniao() {
     const r = dados.reuniao, e = dados.estado;
     return `${controleJanela()}
       <div class="eyebrow">Toque para mostrar na TV</div>
       <div class="cards">${r.itens.length ? r.itens.map(cartao).join('') : '<p class="note">Esta reunião ainda não tem itens.</p>'}</div>
       <button class="btn" data-acao="abrirBib">${I('biblioteca')} Colocar da Biblioteca na reunião</button>
+      <button class="btn" data-acao="abrirTelegram">${I('video')} Vídeos do Telegram</button>
       ${e.tv.tipo === 'janela' ? '' : `<button class="btn" data-acao="abrirJanelas">${I('janela')} Mostrar uma janela do notebook</button>`}
       <button class="btn" data-acao="abrirEnvio">${I('enviar')} Mandar arquivos do celular para a Biblioteca</button>
       <button class="btn danger" data-acao="encerrar">${I('ok')} Encerrar reunião</button>`;
@@ -576,6 +620,7 @@
     if (envio) return telaEnvio();
     if (escolhendoBib) return telaBiblioteca();
     if (escolhendoJanela) return telaJanelas();
+    if (telegram) return telaTelegram();
     return '';
   }
 
@@ -585,7 +630,7 @@
     if (con.semToken) html = telaSemToken();
     else if (!dados) html = `<div class="pad">${avisoConexao() || '<p class="note">Carregando…</p>'}</div>`;
     else if (dados.estado.reuniaoId && dados.reuniao) html = telaReuniao() + sobreposicao();
-    else { escolhendo = null; palavraAberta = false; pregacaoAberta = false; escolhendoMusica = false; escolhendoBib = null; html = telaEscolher() + (envio ? telaEnvio() : novaReuniao ? telaNovaReuniao() : confirmarEncerrar ? telaConfirmar() : escolhendoJanela ? telaJanelas() : '');}
+    else { if (telegram) fecharTelegram(); escolhendo = null; palavraAberta = false; pregacaoAberta = false; escolhendoMusica = false; escolhendoBib = null; html = telaEscolher() + (envio ? telaEnvio() : novaReuniao ? telaNovaReuniao() : confirmarEncerrar ? telaConfirmar() : escolhendoJanela ? telaJanelas() : '');}
     if (dados && dados.estado.reuniaoId) novaReuniao = null;
     if (dados && dados.estado.tv.tipo !== 'janela') avisoTecla = '';
 
@@ -617,6 +662,20 @@
     procurarDeNovo: () => conexao.procurarDeNovo(),
     abrirJanelas: () => { escolhendoJanela = { lista: null }; enviar({ cmd: 'pedirJanelas' }); },
     fecharJanelas: () => { escolhendoJanela = null; },
+    abrirTelegram: () => {
+      telegram = { lista: null };
+      enviar({ cmd: 'pedirTelegram' });
+      clearInterval(relogioTelegram);
+      relogioTelegram = setInterval(() => { if (telegram) enviar({ cmd: 'pedirTelegram' }); }, 4000);
+    },
+    fecharTelegram: () => fecharTelegram(),
+    colocarTelegram: el => {
+      const v = telegram && telegram.lista && telegram.lista[Number(el.dataset.n)];
+      if (!v) return;
+      enviar({ cmd: 'colocarTelegram', nome: v.nome });
+      fecharTelegram();
+      escolhendo = null; escolhendoMusica = false; palavraAberta = false; pregacaoAberta = false;
+    },
     escolherJanela: el => {
       const j = escolhendoJanela && escolhendoJanela.lista && escolhendoJanela.lista[Number(el.dataset.n)];
       if (j) enviar({ cmd: 'mostrarJanela', fonteId: j.id, nome: j.nome });

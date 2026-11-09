@@ -344,6 +344,14 @@ class Dados {
     this.salvar();
   }
 
+  /** De onde o arquivo veio (o nome dele na pasta do Telegram), para o celular saber que já está na reunião. */
+  anotarOrigem(bid, origem) {
+    const b = this.arquivoDaBiblioteca(bid);
+    if (!b) return;
+    b.origem = origem;
+    this.salvar();
+  }
+
   /** Marca (ou desmarca) um vídeo ou imagem para aparecer na escolha da tela de espera. */
   marcarParaEspera(bid, sim) {
     const b = this.arquivoDaBiblioteca(bid);
