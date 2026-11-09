@@ -1,5 +1,5 @@
 // Programa do Notebook: abre o Painel na tela do notebook e o Telão na TV.
-const { app, BrowserWindow, screen, dialog, ipcMain, powerSaveBlocker, nativeImage, nativeTheme, desktopCapturer } = require('electron');
+const { app, BrowserWindow, screen, dialog, ipcMain, powerSaveBlocker, nativeImage, nativeTheme, desktopCapturer, safeStorage, shell } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const { execFile, execFileSync } = require('child_process');
@@ -7,6 +7,7 @@ const { Dados, EXT_IMAGEM, EXT_VIDEO, EXT_AUDIO, tipoDoArquivo } = require('./da
 const { criarServidor } = require('./servidor');
 const { criarTeclas } = require('./teclas');
 const tg = require('./telegram');
+const { criarContaTelegram, criarAdaptadorGram } = require('./telegramConta');
 
 // Os dados ficam sempre na mesma pasta, rodando pelo código (npm start) ou instalado (.exe).
 app.setPath('userData', path.join(app.getPath('appData'), 'auxilio-reuniao'));
@@ -329,6 +330,39 @@ ipcMain.handle('opcoes', () => ({
   pastaTelegramExiste: fs.existsSync(pastaTelegram()),
 }));
 
+// ---------- Conta do Telegram ----------
+// A chave do aplicativo e a sessão ficam cifradas pelo Windows (só este usuário do notebook abre).
+let contaTg = null;
+function contaTelegram() {
+  if (contaTg) return contaTg;
+  const cifra = safeStorage.isEncryptionAvailable();
+  contaTg = criarContaTelegram({
+    arquivo: path.join(dados.pasta, 'telegram-conta.bin'),
+    pastaCache: path.join(dados.pasta, 'telegram-cache'),
+    cifrar: s => (cifra ? safeStorage.encryptString(s) : Buffer.from(s, 'utf8')),
+    decifrar: b => (cifra ? safeStorage.decryptString(b) : b.toString('utf8')),
+    criarAdaptador: criarAdaptadorGram,
+  });
+  contaTg.aoMudar(() => { if (painel && !painel.isDestroyed()) painel.webContents.send('telegram-mudou'); servidor?.transmitir(); });
+  contaTg.iniciar().catch(() => {});
+  // De tempos em tempos deixa a lista de conversas atualizada, para o celular abrir na hora.
+  setInterval(() => contaTg.preCarregar(), 3 * 60 * 1000).unref?.();
+  return contaTg;
+}
+ipcMain.handle('tg-estado', () => contaTelegram().estado());
+ipcMain.handle('tg-acao', async (_e, { acao, a, b } = {}) => {
+  const c = contaTelegram();
+  if (acao === 'chave') c.definirChave(a, b);
+  else if (acao === 'numero') await c.enviarNumero(a);
+  else if (acao === 'codigo') await c.enviarCodigo(a);
+  else if (acao === 'senha') await c.enviarSenha(a);
+  else if (acao === 'voltar') await c.voltar();
+  else if (acao === 'sair') await c.sair();
+  else if (acao === 'esquecer') await c.esquecerTudo();
+  else if (acao === 'site') shell.openExternal('https://my.telegram.org/apps');
+  return c.estado();
+});
+
 ipcMain.handle('escolher-pasta-telegram', async () => {
   const r = await dialog.showOpenDialog(painel, {
     title: 'Escolha a pasta onde o Telegram salva os vídeos',
@@ -440,7 +474,7 @@ app.whenReady().then(async () => {
   servidor = criarServidor({
     dados,
     janelas: { listar: () => listarJanelas(true), apertar: teclas.apertar },
-    telegram: { pasta: pastaTelegram, pastaCapas: pastaCapasTelegram, aoPedir: () => setTimeout(tirarCapas, 300) },
+    telegram: { pasta: pastaTelegram, pastaCapas: pastaCapasTelegram, aoPedir: () => setTimeout(tirarCapas, 300), conta: contaTelegram() },
   });
   try {
     await servidor.iniciar();
@@ -469,4 +503,4 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => app.quit());
-app.on('before-quit', () => { devolverNotificacoes(); servidor?.fechar(); teclas.fechar(); });
+app.on('before-quit', () => { devolverNotificacoes(); servidor?.fechar(); teclas.fechar(); contaTg?.fechar(); });

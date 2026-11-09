@@ -9,6 +9,7 @@ const QRCode = require('qrcode');
 const { estadoInicial, aplicar } = require('./conducao');
 const biblia = require('./biblia');
 const tg = require('./telegram');
+const tgConta = require('./telegramConta');
 
 const RAIZ = path.join(__dirname, '..', '..');
 const PASTAS_ESTATICAS = {
@@ -273,12 +274,21 @@ function criarServidor({ dados, janelas = null, telegram = null }) {
     }
 
     // Vídeos da pasta do Telegram (e as imagens deles), para o celular e para tirar a imagem.
+    // Miniatura de um vídeo de uma conversa do Telegram (conta ligada).
+    if (partes[0] === 'tg-mini') {
+      const conta = telegram && telegram.conta;
+      if (u.searchParams.get('t') !== token || !conta || !conta.ligada()) { res.writeHead(403); res.end(); return; }
+      conta.miniatura(partes[1], partes[2])
+        .then(arq => { if (arq) enviarArquivo(req, res, arq); else { res.writeHead(404); res.end(); } })
+        .catch(() => { res.writeHead(404); res.end(); });
+      return;
+    }
     if (partes[0] === 'telegram' || partes[0] === 'telegram-capa') {
       if (u.searchParams.get('t') !== token || !telegram) { res.writeHead(403); res.end(); return; }
       const nome = decodeURIComponent(partes[1] || '');
       const arquivo = partes[0] === 'telegram'
         ? tg.caminhoDoVideo(telegram.pasta(), nome)
-        : (/^[0-9a-f]{20}.jpg$/.test(nome) ? path.join(telegram.pastaCapas(), nome) : null);
+        : (/^[0-9a-f]{20}\.jpg$/.test(nome) ? path.join(telegram.pastaCapas(), nome) : null);
       if (!arquivo) { res.writeHead(404); res.end(); return; }
       enviarArquivo(req, res, arquivo);
       return;
@@ -381,6 +391,22 @@ function criarServidor({ dados, janelas = null, telegram = null }) {
 
   const mandar = (ws, m) => { try { if (ws.readyState === 1) ws.send(JSON.stringify(m)); } catch {} };
 
+  // Origens (Telegram) dos arquivos que já estão na reunião aberta.
+  function origensDaReuniao() {
+    const r = estado.reuniaoId && dados.reuniao(estado.reuniaoId);
+    return new Set(r ? r.itens.flatMap(i => dados.origensDe(dados.arquivoDaBiblioteca(i.bibliotecaId))) : []);
+  }
+  // Coloca o arquivo da Biblioteca na reunião aberta (sem repetir) e, se `naTv`, mostra na TV. Devolve o item.
+  function colocarEMostrar(bid, papel, ws, naTv = true) {
+    if (!estado.reuniaoId) return null;
+    dados.adicionarItens(estado.reuniaoId, [bid], { semRepetir: true });
+    const item = dados.reuniao(estado.reuniaoId).itens.find(i => i.bibliotecaId === bid);
+    if (item && naTv) executar({ cmd: 'mostrar', itemId: item.id }, papel, ws);
+    else transmitir();
+    return item || null;
+  }
+  let baixandoTg = null;
+
   function executar(cmd, papel, ws) {
     if ((cmd.cmd === 'videoProgresso' || cmd.cmd === 'audioProgresso') && papel !== 'telao') return;
     if (cmd.cmd === 'colocarDaBiblioteca') {
@@ -408,7 +434,7 @@ function criarServidor({ dados, janelas = null, telegram = null }) {
       if (papel === 'telao' || !telegram) return;
       const pasta = telegram.pasta();
       const r = estado.reuniaoId && dados.reuniao(estado.reuniaoId);
-      const naReuniao = new Set(r ? r.itens.map(i => dados.arquivoDaBiblioteca(i.bibliotecaId)?.origem).filter(Boolean) : []);
+      const naReuniao = origensDaReuniao();
       const lista = tg.listarVideos(pasta).map(v => {
         const capa = tg.nomeDaCapa(v);
         return { ...v, capa: fs.existsSync(path.join(telegram.pastaCapas(), capa)) ? capa : null, naReuniao: naReuniao.has(v.nome) };
@@ -424,10 +450,71 @@ function criarServidor({ dados, janelas = null, telegram = null }) {
       const r = dados.importarArquivos([caminho]);
       const b = r.novos[0] || r.repetidos[0];
       if (!b) return;
-      if (!b.origem) dados.anotarOrigem(b.id, path.basename(caminho));
-      dados.adicionarItens(estado.reuniaoId, [b.id], { semRepetir: true });
-      const item = dados.reuniao(estado.reuniaoId).itens.find(i => i.bibliotecaId === b.id);
-      executar({ cmd: 'mostrar', itemId: item.id }, papel, ws);
+      dados.anotarOrigem(b.id, path.basename(caminho));
+      colocarEMostrar(b.id, papel, ws);
+      return;
+    }
+
+    // Conta do Telegram ligada: conversas → vídeos → baixa no notebook → reunião e TV.
+    const conta = telegram && telegram.conta;
+    if (cmd.cmd === 'pedirTgConversas') {
+      if (papel === 'telao') return;
+      if (!conta || !conta.ligada()) { mandar(ws, { tipo: 'tgConversas', ligada: false }); return; }
+      conta.conversas({ forcar: !!cmd.forcar })
+        .then(lista => mandar(ws, { tipo: 'tgConversas', ligada: true, lista }))
+        .catch(e => mandar(ws, { tipo: 'tgErro', mensagem: tgConta.mensagemDeErro(e) }));
+      return;
+    }
+    if (cmd.cmd === 'pedirTgVideos') {
+      if (papel === 'telao' || !conta || !conta.ligada()) return;
+      const conversa = String(cmd.conversa || '');
+      conta.videos(conversa)
+        .then(lista => {
+          const naReuniao = origensDaReuniao();
+          mandar(ws, { tipo: 'tgVideos', conversa, lista: lista.map(v => {
+            const o = `tg:${conversa}:${v.id}`;
+            return { ...v, jaBaixado: !!dados.daOrigem(o), naReuniao: naReuniao.has(o) };
+          }) });
+        })
+        .catch(e => mandar(ws, { tipo: 'tgErro', mensagem: tgConta.mensagemDeErro(e) }));
+      return;
+    }
+    if (cmd.cmd === 'escolhaTg') {
+      if (papel === 'telao' || !baixandoTg || typeof cmd.naTv !== 'boolean') return;
+      baixandoTg.naTv = cmd.naTv;
+      return;
+    }
+    if (cmd.cmd === 'baixarTg') {
+      if (papel === 'telao' || !conta || !conta.ligada() || !estado.reuniaoId) return;
+      const conversa = String(cmd.conversa || ''), msg = Number(cmd.msg);
+      if (!/^-?\d+$/.test(conversa) || !Number.isInteger(msg)) return;
+      const origem = `tg:${conversa}:${msg}`;
+      // O pastor escolhe (antes ou durante o download) se o vídeo vai direto para a TV ou só para a reunião.
+      // Sem escolha, só entra na reunião e o celular pergunta quando terminar.
+      const pronto = (bid, naTv) => {
+        const item = colocarEMostrar(bid, papel, ws, naTv === true);
+        mandar(ws, { tipo: 'tgPronto', conversa, msg, itemId: item && item.id, mostrou: naTv === true && !!item });
+      };
+      const ja = dados.daOrigem(origem);
+      if (ja) { pronto(ja.id, cmd.naTv); return; }
+      if (baixandoTg) { mandar(ws, { tipo: 'tgErro', mensagem: 'Espere o outro vídeo terminar de baixar.' }); return; }
+      baixandoTg = { conversa, msg, pct: 0, naTv: typeof cmd.naTv === 'boolean' ? cmd.naTv : null };
+      let ultimo = -1;
+      const avisar = pct => { if (pct !== ultimo) { ultimo = pct; baixandoTg && (baixandoTg.pct = pct); mandar(ws, { tipo: 'tgProgresso', conversa, msg, pct }); } };
+      avisar(0);
+      conta.baixar(conversa, msg, avisar)
+        .then(({ arquivo, pasta, titulo }) => {
+          const r = dados.importarArquivos([arquivo]);
+          try { fs.rmSync(pasta, { recursive: true, force: true }); } catch {}
+          const b = r.novos[0] || r.repetidos[0];
+          if (b && r.novos[0] && titulo) dados.renomearArquivo(b.id, titulo); // com "?" e "!" que o nome do arquivo não aceita
+          if (!b) throw new Error('O vídeo baixou, mas não deu para colocar na Biblioteca.');
+          dados.anotarOrigem(b.id, origem);
+          if (estado.reuniaoId) pronto(b.id, baixandoTg && baixandoTg.naTv);
+          else { transmitir(); mandar(ws, { tipo: 'tgPronto', conversa, msg, itemId: null, mostrou: false }); }
+        })
+        .catch(e => mandar(ws, { tipo: 'tgErro', mensagem: tgConta.mensagemDeErro(e) }))
+        .finally(() => { baixandoTg = null; });
       return;
     }
     if (cmd.cmd === 'teclaJanela') {

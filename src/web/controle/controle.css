@@ -359,3 +359,69 @@ body { min-height: 100vh; min-height: 100dvh; }
 .tg-vazio { text-align: center; padding: 18px 8px; }
 .tg-vazio .i { width: 44px; height: 44px; color: var(--navy); }
 .jan-botoes.so-um { grid-template-columns: 1fr; }
+/* Conta do Telegram: conversas e vídeos */
+.tg-conversas { display: grid; gap: 10px; }
+.tg-conversa { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 12px; min-height: 72px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); font: inherit; color: inherit; text-align: left; }
+.tg-av { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 17px; }
+.tg-conversa .tg-info { display: grid; gap: 2px; min-width: 0; }
+.tg-conversa .tg-nome { font-weight: 700; font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tg-conversa small { font-size: 14px; color: var(--muted); }
+.tg-qt { font-size: 13px; font-weight: 700; background: var(--surface-2); color: var(--navy); border-radius: 999px; padding: 4px 10px; white-space: nowrap; }
+.janela-cel .tg-capa { position: relative; overflow-wrap: normal; -webkit-line-clamp: unset; font-weight: 400; width: 128px; aspect-ratio: 16 / 9; border-radius: 6px; background: var(--surface-2); color: var(--navy); display: grid; place-items: center; overflow: hidden; }
+.tg-capa .i { width: 30px; height: 30px; }
+.tg-capa img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; background: #000; }
+.janela-cel .tg-capa .tg-dur { position: absolute; right: 4px; bottom: 4px; font-size: 12px; font-weight: 700; background: rgba(0, 0, 0, .7); color: #fff; padding: 1px 5px; border-radius: 4px; display: block; -webkit-line-clamp: unset; }
+.tg-baixando { display: grid; gap: 12px; justify-items: center; text-align: center; padding: 20px 4px; }
+.tg-baixando > .i { width: 44px; height: 44px; color: var(--navy); }
+.tg-baixando b { font-size: 18px; overflow-wrap: anywhere; }
+.tg-barra { width: 100%; height: 14px; border-radius: 99px; background: var(--line); overflow: hidden; }
+.tg-barra i { display: block; height: 100%; background: var(--navy); border-radius: 99px; transition: width .3s linear; }
+.tg-pct { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; margin: 0; }
+.tg-escolha { display: grid; gap: 10px; margin-top: 8px; }
+.tg-escolha-tit { margin: 0; font-weight: 700; font-size: 17px; }
+.tg-op { justify-content: flex-start; min-height: 60px; font-size: 18px; }
+.tg-op.sel { background: var(--navy); border-color: var(--navy); color: #fff; }
+.tg-baixando > .i.ok, .tg-baixando > svg { color: var(--navy); }
+/* "Buscando…" bem visível */
+.carregando { display: grid; justify-items: center; gap: 10px; text-align: center; padding: 36px 12px; }
+.carregando b { font-size: 19px; }
+.carregando .note { margin: 0; }
+.roda { width: 48px; height: 48px; border-radius: 50%; border: 5px solid var(--line); border-top-color: var(--navy); animation: girar .9s linear infinite; }
+@keyframes girar { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .roda { animation-duration: 2.5s; } }
+
+/* ---------- Mais espaço no meio: nomes em no máximo 2 linhas, topo e base mais baixos ---------- */
+.card .t { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; font-size: 18px; }
+.card { min-height: 68px; padding-top: 10px; padding-bottom: 10px; }
+.card.on { padding-top: 9px; padding-bottom: 9px; }
+.m-topo { gap: 8px; padding-top: max(10px, env(safe-area-inset-top, 0px)); padding-bottom: 12px; }
+.m-nome { font-size: 21px; }
+.m-agora { padding: 8px; gap: 10px; }
+.m-tv { width: 104px; }
+.m-rot { font-size: 16px; }
+.m-apagar { min-height: 52px; width: 62px; }
+.m-meio { padding-top: 12px; }
+.m-base { gap: 6px; padding-top: 8px; padding-bottom: max(8px, env(safe-area-inset-bottom, 0px)); }
+.m-nav-btn { min-height: 52px; font-size: 15px; gap: 2px; }
+.m-nav-btn .i { width: 22px; height: 22px; }
+.hud { padding: 6px 8px; gap: 8px; }
+.hud > .btn:first-child { width: 44px; height: 44px; }
+@media (min-width: 860px) {
+  .m-topo { padding: 22px; gap: 16px; }
+  .m-tv { width: 100%; }
+  .m-base { padding: 0 22px 22px; gap: 12px; }
+  .m-agora { padding: 12px; }
+  .m-meio { padding-top: 24px; }
+}
+.card br { display: none; }
+.card .d { display: block; margin-top: 2px; }
+/* Lista de reuniões com uma reunião ainda aberta (voltou pelo botão do celular) */
+.reuniao-aberta { display: grid; gap: 6px; padding: 12px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--line-2); }
+.reuniao-aberta .note { margin: 0; font-weight: 700; }
+/* Fim da lista da reunião: os outros botões numa caixa separada (modelo B) */
+.mais-opcoes { display: grid; gap: 8px; margin-top: 10px; padding: 12px; border-radius: 16px; background: var(--surface-2); border: 1px solid var(--line-2); }
+.mais-tit { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 16px; color: var(--navy); padding: 0 2px 2px; }
+.mais-tit .i { width: 20px; height: 20px; }
+.mais-opcoes .btn { justify-content: flex-start; text-align: left; background: var(--surface); }
+.encerrar-sozinho { margin-top: 14px; }
+@media (min-width: 860px) { .mais-opcoes { max-width: 720px; } .m-meio > .encerrar-sozinho { min-width: 420px; } }

@@ -381,3 +381,13 @@ main > #aba-reserva { max-width: none; }
 }
 
 .pasta-tg { overflow-wrap: anywhere; font-size: 15px; font-weight: 600; margin: 4px 0 6px; }
+
+/* Conta do Telegram */
+.passos-tg { margin: 4px 0 10px; padding-left: 22px; display: grid; gap: 6px; line-height: 1.45; }
+.form-tg { display: grid; gap: 10px; max-width: 460px; margin-top: 8px; }
+.form-tg input { font-size: 18px; }
+.form-tg .codigo-tg { letter-spacing: .3em; font-weight: 700; font-size: 22px; max-width: 220px; }
+.aviso-erro { display: flex; gap: 8px; align-items: flex-start; background: #fdecec; color: #8c1018; border: 1px solid #f3c4c8; border-radius: 10px; padding: 10px 12px; font-weight: 600; }
+.aviso-erro .i { flex: none; margin-top: 2px; }
+.tg-ligado { display: flex; gap: 12px; align-items: flex-start; }
+.tg-ligado > .i { width: 28px; height: 28px; color: var(--live); flex: none; }

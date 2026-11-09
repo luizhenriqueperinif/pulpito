@@ -344,12 +344,22 @@ class Dados {
     this.salvar();
   }
 
-  /** De onde o arquivo veio (o nome dele na pasta do Telegram), para o celular saber que já está na reunião. */
+  /** De onde o arquivo veio (nome na pasta do Telegram, ou "tg:conversa:mensagem"), para não baixar de novo
+   * e para o celular saber que já está na reunião. Um mesmo arquivo pode ter vindo de vários lugares. */
   anotarOrigem(bid, origem) {
     const b = this.arquivoDaBiblioteca(bid);
-    if (!b) return;
-    b.origem = origem;
+    if (!b || !origem) return;
+    const lista = new Set([...(b.origens || []), ...(b.origem ? [b.origem] : []), origem]);
+    b.origens = [...lista];
+    if (!b.origem) b.origem = origem;
     this.salvar();
+  }
+
+  origensDe(b) { return b ? [...(b.origens || []), ...(b.origem ? [b.origem] : [])] : []; }
+
+  /** O arquivo da Biblioteca que veio desse lugar (ainda existindo). */
+  daOrigem(origem) {
+    return this.d.biblioteca.find(b => this.origensDe(b).includes(origem)) || null;
   }
 
   /** Marca (ou desmarca) um vídeo ou imagem para aparecer na escolha da tela de espera. */

@@ -94,3 +94,60 @@ test('celular pega vídeo do Telegram: entra na Biblioteca, na reunião e na TV'
   ws.close(); s.fechar();
   for (const p of [tg, capas, base]) fs.rmSync(p, { recursive: true, force: true });
 });
+
+test('conta do Telegram: celular escolhe conversa e vídeo, baixa uma vez só e passa na TV', async () => {
+  const WebSocket = require('ws');
+  const { Dados } = require('../src/main/dados');
+  const { criarServidor } = require('../src/main/servidor');
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'pulpito-tgconta-'));
+  const d = new Dados(base); d.config.porta = 7600 + Math.floor(Math.random() * 300);
+  const r = d.criarReuniao({});
+  let baixou = 0;
+  const conta = {
+    ligada: () => true,
+    conversas: async () => [{ id: '-100', nome: 'Obreiros', tipo: 'grupo', qt: 1, quando: 1 }],
+    videos: async () => [{ id: 7, titulo: 'Testemunho', duracao: 60, tamanho: 50000, quando: 1, temMiniatura: false }],
+    miniatura: async () => null,
+    baixar: async (c, m, prog) => {
+      baixou++; prog(40); prog(100);
+      const p = fs.mkdtempSync(path.join(os.tmpdir(), 'pulpito-tgbx-'));
+      const arquivo = path.join(p, 'Testemunho.mp4'); fs.writeFileSync(arquivo, Buffer.alloc(50000, 7));
+      return { arquivo, pasta: p, titulo: 'Testemunho' };
+    },
+  };
+  const s = criarServidor({ dados: d, telegram: { pasta: () => base, pastaCapas: () => base, conta } });
+  await s.iniciar();
+  const ws = new WebSocket(`ws://127.0.0.1:${d.config.porta}/ws?t=${s.token}&papel=controle`);
+  const recebidos = [];
+  ws.on('message', m => recebidos.push(JSON.parse(m)));
+  await new Promise(ok => ws.on('open', ok));
+  const espera = ms => new Promise(ok => setTimeout(ok, ms));
+  const manda = c => ws.send(JSON.stringify(c));
+  const ultimo = tipo => recebidos.filter(m => m.tipo === tipo).pop();
+
+  manda({ cmd: 'escolherReuniao', id: r.id }); await espera(100);
+  manda({ cmd: 'pedirTgConversas' }); await espera(100);
+  assert.equal(ultimo('tgConversas').lista[0].nome, 'Obreiros');
+  manda({ cmd: 'pedirTgVideos', conversa: '-100' }); await espera(100);
+  assert.equal(ultimo('tgVideos').lista[0].jaBaixado, false);
+
+  // Sem escolher: entra na reunião, mas não vai para a TV (o celular pergunta).
+  manda({ cmd: 'baixarTg', conversa: '-100', msg: 7 }); await espera(300);
+  assert.deepEqual(recebidos.filter(m => m.tipo === 'tgProgresso').map(m => m.pct), [0, 40, 100]);
+  const itens = d.reuniao(r.id).itens;
+  assert.equal(itens.length, 1);
+  assert.deepEqual([ultimo('tgPronto').itemId, ultimo('tgPronto').mostrou], [itens[0].id, false]);
+  assert.notEqual(ultimo('estado').estado.tv.itemId, itens[0].id);
+
+  // Segunda vez, escolhendo "direto na TV": não baixa de novo e vai para a TV.
+  manda({ cmd: 'baixarTg', conversa: '-100', msg: 7, naTv: true }); await espera(200);
+  assert.equal(baixou, 1);
+  assert.equal(ultimo('tgPronto').mostrou, true);
+  assert.equal(ultimo('estado').estado.tv.itemId, itens[0].id);
+  assert.equal(d.reuniao(r.id).itens.length, 1);
+  manda({ cmd: 'pedirTgVideos', conversa: '-100' }); await espera(100);
+  assert.deepEqual([ultimo('tgVideos').lista[0].jaBaixado, ultimo('tgVideos').lista[0].naReuniao], [true, true]);
+
+  ws.close(); s.fechar();
+  fs.rmSync(base, { recursive: true, force: true });
+});

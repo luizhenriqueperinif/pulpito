@@ -113,7 +113,7 @@
     if (arrastandoItem) { precisaDesenhar = true; return; }
     // Não apaga o que a pessoa está digitando; desenha quando ela sair do campo.
     const foco = document.activeElement;
-    if (foco && foco.matches('input[type="text"], input[type="date"], input[type="time"]') && (foco.closest('#conteudo') || foco.closest('#modal'))) {
+    if (foco && foco.matches('input[type="text"], input[type="password"], input[type="date"], input[type="time"]') && (foco.closest('#conteudo') || foco.closest('#modal'))) {
       precisaDesenhar = true;
       return;
     }
@@ -791,16 +791,73 @@
         <div class="campo"><span>Esconder os avisos do Windows (e-mail, atualizações...) enquanto o programa está aberto</span>${simNao('esconderNotificacoes', o.esconderNotificacoes)}
           <p class="note">Ao fechar o programa, os avisos voltam como estavam.</p></div>
       </section>
+      ${secaoContaTelegram()}
       <section class="caixa">
-        <h2>Vídeos do Telegram</h2>
-        <p class="note">Os vídeos que você baixa no Telegram do notebook aparecem no celular, em "Vídeos do Telegram".
-          Ao tocar num deles, ele entra na reunião e passa na TV.</p>
+        <h2>Vídeos baixados no notebook</h2>
+        <p class="note">Os vídeos que você baixa no Telegram do notebook também aparecem no celular, em "Vídeos do Telegram" › "Baixados no notebook".</p>
         <div class="campo"><span>Pasta onde o Telegram salva os vídeos</span>
           <div class="t-grande pasta-tg">${esc(o.pastaTelegram)}</div>
           ${o.pastaTelegramExiste ? '' : '<p class="note">Essa pasta ainda não existe. Ela aparece quando você baixar o primeiro vídeo no Telegram.</p>'}
           <div class="acoes"><button class="btn sm" data-a="pastaTelegram">${I('procurar')} Escolher outra pasta</button>
             ${o.pastaTelegramPadrao ? '' : '<button class="btn sm" data-a="opcao" data-v="pastaTelegramPadrao" data-sim="1">Voltar para a pasta normal</button>'}</div></div>
       </section>`;
+  }
+
+  // Conta do Telegram: liga uma vez (chave do aplicativo → número → código → senha, se tiver).
+  let tg = null, tgOcupado = false;
+  function carregarTelegram() {
+    if (!window.notebook?.tgEstado) return;
+    window.notebook.tgEstado().then(e => { tg = e; desenhar(); });
+  }
+  carregarTelegram();
+  window.notebook?.aoMudarTelegram?.(carregarTelegram);
+  function secaoContaTelegram() {
+    if (!tg) return '';
+    const erro = tg.erro ? `<div class="aviso-erro">${I('alerta')} <span>${esc(tg.erro)}</span></div>` : '';
+    const espera = tgOcupado ? 'disabled' : '';
+    const botao = txt => `<button class="btn primary" type="submit" ${espera}>${tgOcupado ? 'Aguarde…' : txt}</button>`;
+    let corpo = '';
+    if (tg.etapa === 'semChave') {
+      corpo = `<p class="note">Para o celular mostrar as conversas e os vídeos do Telegram, o Púlpito precisa de uma chave de aplicativo. É grátis e só se faz uma vez:</p>
+        <ol class="passos-tg">
+          <li>Abra <b>my.telegram.org</b> e entre com o número do Telegram (chega um código no Telegram).</li>
+          <li>Clique em <b>API development tools</b>.</li>
+          <li>Preencha <b>App title</b> (ex.: Pulpito Igreja) e <b>Short name</b> (ex.: pulpito). Em Platform escolha <b>Desktop</b> e clique em Create application.</li>
+          <li>Copie o <b>App api_id</b> e o <b>App api_hash</b> para os campos abaixo.</li>
+        </ol>
+        <div class="acoes"><button class="btn sm" type="button" data-a="tgSite">${I('enviar')} Abrir my.telegram.org</button></div>
+        <form id="form-tg-chave" class="form-tg" autocomplete="off">
+          <label class="campo"><span>api_id</span><input type="text" id="tg-apiid" inputmode="numeric" placeholder="Ex.: 1234567"></label>
+          <label class="campo"><span>api_hash</span><input type="text" id="tg-apihash" placeholder="32 letras e números" spellcheck="false"></label>
+          ${erro}<div class="acoes">${botao('Guardar a chave')}</div></form>`;
+    } else if (tg.etapa === 'desligado') {
+      corpo = `<p class="note">Digite o número do Telegram que vai ser usado (com DDD). Vai chegar um código no Telegram desse número.</p>
+        <form id="form-tg-numero" class="form-tg" autocomplete="off">
+          <label class="campo"><span>Número do celular</span><input type="text" id="tg-numero" inputmode="tel" placeholder="Ex.: 35 99999-1234" value="${esc(tg.numero ? tg.numero.replace(/^\+55/, '') : '')}"></label>
+          ${erro}<div class="acoes">${botao('Mandar o código')}
+            <button class="btn sm" type="button" data-a="tgEsquecer">Trocar a chave do aplicativo</button></div></form>`;
+    } else if (tg.etapa === 'codigo') {
+      corpo = `<p class="note">Chegou um código no Telegram do número <b>${esc(tg.numero)}</b>, numa conversa chamada "Telegram". Digite aqui:</p>
+        <form id="form-tg-codigo" class="form-tg" autocomplete="off">
+          <label class="campo"><span>Código</span><input type="text" id="tg-codigo" inputmode="numeric" maxlength="8" placeholder="5 números" class="codigo-tg"></label>
+          ${erro}<div class="acoes">${botao('Entrar')}<button class="btn sm" type="button" data-a="tgVoltar">Mandar outro código / outro número</button></div></form>`;
+    } else if (tg.etapa === 'senha') {
+      corpo = `<p class="note">Essa conta tem <b>senha de duas etapas</b>. Digite a senha do Telegram:</p>
+        <form id="form-tg-senha" class="form-tg" autocomplete="off">
+          <label class="campo"><span>Senha</span><input type="password" id="tg-senha"></label>
+          ${erro}<div class="acoes">${botao('Entrar')}<button class="btn sm" type="button" data-a="tgVoltar">Começar de novo</button></div></form>`;
+    } else {
+      corpo = `<div class="tg-ligado">${I('ok')}<div><b>Telegram ligado${tg.nome ? ': ' + esc(tg.nome) : ''}</b>
+          <p class="note">No celular, em "Vídeos do Telegram", aparecem as conversas que têm vídeo. O Púlpito só lê as conversas e baixa os vídeos escolhidos; não manda mensagens.</p></div></div>
+        ${erro}
+        <div class="acoes"><button class="btn sm danger" type="button" data-a="tgSair">Sair do Telegram</button></div>
+        <p class="note">Também dá para desligar pelo próprio Telegram: Configurações › Dispositivos › "Púlpito (notebook da igreja)".</p>`;
+    }
+    return `<section class="caixa"><h2>Conta do Telegram</h2>${corpo}</section>`;
+  }
+  async function acaoTelegram(acao, a, b) {
+    tgOcupado = true; desenhar();
+    try { tg = await window.notebook.tgAcao(acao, a, b); } finally { tgOcupado = false; document.activeElement?.blur(); desenhar(); }
   }
 
   // ---------- ações ----------
@@ -998,6 +1055,10 @@
       if (r && r.erro) avisar(r.erro); else if (r && r.ok) avisar('Logo colocada.');
     },
     tirarLogo: async () => { await window.notebook.tirarLogo(); avisar('Logo tirada. Voltou a cruz do Púlpito.'); },
+    tgSite: () => { window.notebook.tgAcao('site'); return Promise.resolve(); },
+    tgVoltar: () => acaoTelegram('voltar'),
+    tgSair: () => acaoTelegram('sair'),
+    tgEsquecer: () => acaoTelegram('esquecer'),
     pastaTelegram: async () => { if (await window.notebook.escolherPastaTelegram()) { avisar('Pasta do Telegram trocada.'); carregarOpcoes(); } },
     opcao: async (nome, el) => {
       await window.notebook.mudarOpcao(nome, el.dataset.sim === '1');
@@ -1033,6 +1094,10 @@
   document.addEventListener('submit', async ev => {
     ev.preventDefault();
     const f = ev.target;
+    if (f.id === 'form-tg-chave') return acaoTelegram('chave', $('tg-apiid').value, $('tg-apihash').value);
+    if (f.id === 'form-tg-numero') return acaoTelegram('numero', $('tg-numero').value);
+    if (f.id === 'form-tg-codigo') return acaoTelegram('codigo', $('tg-codigo').value);
+    if (f.id === 'form-tg-senha') return acaoTelegram('senha', $('tg-senha').value);
     if (f.id === 'form-categoria') {
       const nome = $('cat-nome').value.trim();
       if (!nome) { avisar('Escreva o nome da categoria.'); return; }
