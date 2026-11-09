@@ -35,6 +35,7 @@
       "package.json",
       "!src/**/*.md"
     ],
+    "npmRebuild": false,
     "win": {
       "target": "nsis",
       "icon": "build/icon.png",
