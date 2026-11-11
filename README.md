@@ -61,6 +61,8 @@ O processo principal do Electron guarda o estado da reunião e serve as três te
 
 ## Rodar (desenvolvimento)
 
+Os textos da Bíblia (`src/biblia/*.json`) **não estão no repositório**, porque os direitos são das editoras. Antes de rodar, coloque os arquivos na pasta `src/biblia/` (formato e origem em [src/biblia/LEIA-ME.md](src/biblia/LEIA-ME.md)).
+
 ```
 npm install
 npm start
@@ -88,4 +90,4 @@ Para atualizar o programa: gere um instalador novo (suba a `version` no package.
 
 ## Autor
 
-Feito por **Luiz Henrique**: [LinkedIn](https://www.linkedin.com/in/SEU-USUARIO) · [GitHub](https://github.com/luizhenriqueperinif)
+Feito por **Luiz Henrique**: [LinkedIn](https://www.linkedin.com/in/luizhperini) · [GitHub](https://github.com/luizhenriqueperinif)

@@ -1,3 +1,6 @@
 node_modules/
 dist/
 *.log
+
+# Textos da Bíblia: direitos das editoras, ficam só no computador (ver src/biblia/LEIA-ME.md)
+src/biblia/*.json
