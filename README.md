@@ -91,3 +91,5 @@ Para atualizar o programa: gere um instalador novo (suba a `version` no package.
 ## Autor
 
 Feito por **Luiz Henrique**: [LinkedIn](https://www.linkedin.com/in/luizhperini) · [GitHub](https://github.com/luizhenriqueperinif)
+
+Créditos das fotos de fundo dos versículos: [src/web/comum/fundos/CREDITOS.md](src/web/comum/fundos/CREDITOS.md). As telas acima usam dados de exemplo.
