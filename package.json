@@ -1,6 +1,6 @@
 {
   "name": "altar",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "private": true,
   "description": "Altar: prepara a reunião no notebook e conduz pelo celular, projetando na TV da igreja.",
   "main": "src/main/main.js",

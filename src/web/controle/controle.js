@@ -17,6 +17,7 @@
   let pregacaoAberta = false;  // painel da Pregação aberto (◀ ▶ + miniaturas)
   let escolhendoMusica = false; // lista de músicas para tocar avulsa
   let envio = null;            // mandar arquivos do celular para a Biblioteca: { status, atual, total, pct, resultado, modo }
+  let colocando = false;       // "Colocar na reunião": a pergunta "onde está?" (no notebook ou neste celular)
   let escolhendoBib = null;    // colocar da Biblioteca na reunião: { aba, sel: [ids na ordem marcada] }
   let novaReuniao = null;      // criando reunião pelo celular: { pastorId, nome }
   let escolhendoJanela = null; // lista das janelas abertas no notebook: { lista: null (carregando) | [...] }
@@ -441,11 +442,9 @@
       <div class="eyebrow">Toque para mostrar na TV</div>
       <div class="cards">${r.itens.length ? r.itens.map(cartao).join('') : '<p class="note">Esta reunião ainda não tem itens.</p>'}</div>
       <section class="mais-opcoes" aria-label="Colocar ou mostrar outras coisas">
-        <div class="mais-tit">${I('mais')} Colocar ou mostrar outras coisas</div>
-        <button class="btn" data-acao="abrirBib">${I('biblioteca')} Colocar da Biblioteca na reunião</button>
+        <button class="btn" data-acao="abrirColocar">${I('mais')} Colocar outra coisa na reunião</button>
         <button class="btn" data-acao="abrirTelegram">${I('video')} Vídeos do Telegram</button>
-        ${e.tv.tipo === 'janela' ? '' : `<button class="btn" data-acao="abrirJanelas">${I('janela')} Mostrar uma janela do notebook</button>`}
-        <button class="btn" data-acao="abrirEnvio">${I('enviar')} Mandar arquivos do celular para a Biblioteca</button>
+        ${e.tv.tipo === 'janela' ? '' : `<button class="btn" data-acao="abrirJanelas">${I('janela')} Mostrar uma janela do notebook na TV</button>`}
       </section>
       <button class="btn danger encerrar-sozinho" data-acao="encerrar">${I('ok')} Encerrar reunião</button>`;
   }
@@ -567,17 +566,17 @@
           <p class="note">Deixe esta tela aberta e o celular ligado até terminar.</p></div>`;
     } else if (e.status === 'pronto') {
       const r = e.resultado || {};
-      const onde = 'Estão na Biblioteca do notebook.';
+      const onde = e.naReuniao ? 'Já estão no fim da reunião.' : 'Estão na Biblioteca do notebook.';
       const msg = e.modo === 'pregacao'
-        ? (r.repetida ? `Essa pregação já estava na Biblioteca ("${r.titulo}"). Não foi copiada de novo.`
+        ? (r.repetida ? `Essa pregação já estava na Biblioteca ("${r.titulo}"). Não foi copiada de novo.${e.naReuniao ? ' Ela está na reunião.' : ''}`
           : r.qtd > 1 ? `${r.qtd} pregações chegaram no notebook, com ${r.imagens} imagens ao todo. ${onde}`
           : r.qtd ? `A pregação com ${r.imagens} imagens chegou no notebook. ${onde}` : 'Não deu certo. A pregação precisa de fotos ou de um PDF.')
         : (r.qtd ? `${r.qtd} ${r.qtd === 1 ? 'arquivo chegou' : 'arquivos chegaram'} no notebook. ${onde}`
-          : r.repetidos ? 'Esses arquivos já estavam na Biblioteca.' : 'Nenhum arquivo chegou.');
+          : r.repetidos ? (e.naReuniao ? 'Esses arquivos já estavam no notebook. Estão na reunião.' : 'Esses arquivos já estavam na Biblioteca.') : 'Nenhum arquivo chegou.');
       corpo = `<div class="envio-andamento"><div class="grande">${I(r.qtd || r.repetidos || r.repetida ? 'ok' : 'alerta')}</div><h3>${esc(msg)}</h3>
           ${r.qtd && r.repetidos ? `<p class="note">${r.repetidos} ${r.repetidos === 1 ? 'já estava' : 'já estavam'} na Biblioteca e não ${r.repetidos === 1 ? 'foi copiado' : 'foram copiados'} de novo.</p>` : ''}
           ${r.ignorados ? `<p class="note">${r.ignorados} ${r.ignorados === 1 ? 'arquivo não era' : 'arquivos não eram'} foto, vídeo, música ou PDF e ${r.ignorados === 1 ? 'ficou' : 'ficaram'} de fora.</p>` : ''}
-          ${dados.reuniao && r.ids && r.ids.length
+          ${!e.naReuniao && dados.reuniao && r.ids && r.ids.length
             ? `<button class="btn primary huge" data-acao="colocarRecebidos">${I('biblioteca')} Colocar na reunião agora</button>
                <button class="btn huge" data-acao="fecharEnvio">Agora não</button>`
             : '<button class="btn primary huge" data-acao="fecharEnvio">OK</button>'}</div>`;
@@ -586,7 +585,7 @@
           <p class="note">Confira se o celular está no Wi-Fi da igreja e tente de novo.</p>
           <button class="btn primary huge" data-acao="envioDeNovo">Tentar de novo</button></div>`;
     } else {
-      corpo = `<p class="note">Os arquivos vão para a Biblioteca do notebook. Depois é só colocar na reunião.</p>
+      corpo = `<p class="note">${e.naReuniao ? 'Os arquivos vão para o notebook e já entram no fim da reunião.' : 'Os arquivos vão para a Biblioteca do notebook. Depois é só colocar na reunião.'}</p>
         <div class="eyebrow">O que vai mandar?</div>
         <label class="btn primary huge envio-btn">${I('imagem')} Fotos, vídeos e músicas
           <input type="file" data-envio="arquivos" accept="image/*,video/*,audio/*,application/pdf" multiple hidden></label>
@@ -595,7 +594,7 @@
     }
     const ocupado = e.status === 'enviando';
     return `<div class="painel" role="dialog" aria-label="Mandar para o notebook">
-      <div class="painel-topo"><h2>Mandar para a Biblioteca</h2>${ocupado ? '' : `<button class="btn" data-acao="fecharEnvio">${I('fechar')} Fechar</button>`}</div>
+      <div class="painel-topo"><h2>${e.naReuniao ? 'Mandar deste celular' : 'Mandar para a Biblioteca'}</h2>${ocupado ? '' : `<button class="btn" data-acao="fecharEnvio">${I('fechar')} Fechar</button>`}</div>
       <div class="painel-corpo" data-scroll="envio">${corpo}</div></div>`;
   }
 
@@ -620,6 +619,18 @@
     return new Date(a, m - 1, dd).toLocaleDateString('pt-BR', { weekday: 'long' }) + ' · ' + ddmm;
   }
   const ABAS_BIB = [['imagem', 'Imagens'], ['video', 'Vídeos'], ['pregacao', 'Pregações'], ['musica', 'Músicas']];
+  // "Colocar outra coisa na reunião": uma porta só, e a pergunta é onde a coisa está.
+  function telaColocar() {
+    const origem = (acao, icone, titulo, texto) => `<button class="btn origem" data-acao="${acao}">${I(icone)}<span><b>${titulo}</b><small>${texto}</small></span></button>`;
+    return `<div class="painel" role="dialog" aria-label="Colocar na reunião">
+      <div class="painel-topo"><h2>Colocar na reunião</h2><button class="btn" data-acao="fecharColocar">${I('fechar')} Fechar</button></div>
+      <div class="painel-corpo" data-scroll="colocar">
+        <div class="eyebrow">Onde está o que você quer colocar?</div>
+        ${origem('abrirBib', 'biblioteca', 'No notebook', 'Fotos, vídeos, músicas e pregações que já estão na Biblioteca')}
+        ${origem('abrirEnvioReuniao', 'enviar', 'Neste celular', 'Manda agora e já entra na reunião')}
+      </div></div>`;
+  }
+
   function telaBiblioteca() {
     const b = escolhendoBib;
     const naReuniao = new Set(dados.reuniao.itens.map(i => i.bibliotecaId).filter(Boolean));
@@ -673,7 +684,9 @@
           if (barra) barra.style.width = p + '%';
         });
       }
-      const r = await fetch(`/api/enviar-fim?t=${t}&lote=${lote}&modo=${modo}`, { method: 'POST' });
+      // Veio de "Colocar na reunião": o notebook já põe o que chegou no fim da reunião aberta.
+      const naReuniao = envio.naReuniao && dados.estado.reuniaoId ? `&reuniao=${encodeURIComponent(dados.estado.reuniaoId)}` : '';
+      const r = await fetch(`/api/enviar-fim?t=${t}&lote=${lote}&modo=${modo}${naReuniao}`, { method: 'POST' });
       if (!r.ok) throw new Error('fim ' + r.status);
       envio.resultado = await r.json();
       envio.status = 'pronto';
@@ -761,6 +774,7 @@
     if (escolhendoBib) return telaBiblioteca();
     if (escolhendoJanela) return telaJanelas();
     if (telegram) return telaTelegram();
+    if (colocando) return telaColocar();
     return '';
   }
 
@@ -772,7 +786,7 @@
     if (dados && dados.estado.reuniaoId !== reuniaoVista) { reuniaoVista = dados.estado.reuniaoId; naInicio = false; }
     if (con.semToken || !dados) { /* sem conexão: já decidido acima */ }
     else if (dados.estado.reuniaoId && dados.reuniao && !naInicio) html = telaReuniao() + sobreposicao();
-    else { if (telegram) fecharTelegram(); escolhendo = null; palavraAberta = false; pregacaoAberta = false; escolhendoMusica = false; escolhendoBib = null; html = telaEscolher() + (envio ? telaEnvio() : novaReuniao ? telaNovaReuniao() : confirmarEncerrar ? telaConfirmar() : escolhendoJanela ? telaJanelas() : '');}
+    else { if (telegram) fecharTelegram(); escolhendo = null; palavraAberta = false; pregacaoAberta = false; escolhendoMusica = false; escolhendoBib = null; colocando = false; html = telaEscolher() + (envio ? telaEnvio() : novaReuniao ? telaNovaReuniao() : confirmarEncerrar ? telaConfirmar() : escolhendoJanela ? telaJanelas() : '');}
     if (dados && dados.estado.reuniaoId && !naInicio) novaReuniao = null;
     if (dados && dados.estado.tv.tipo !== 'janela') avisoTecla = '';
     guardarPasso();
@@ -815,6 +829,7 @@
     }
     if (envio) { if (envio.status !== 'enviando') envio = null; return true; }
     if (escolhendoBib) { escolhendoBib = null; return true; }
+    if (colocando) { colocando = false; return true; }
     if (escolhendoJanela) { escolhendoJanela = null; return true; }
     if (novaReuniao) { novaReuniao = null; return true; }
     if (naReuniao && escolhendo) {
@@ -832,7 +847,7 @@
   // Tem para onde voltar? Então deixa um passo a mais no histórico do navegador para o voltar cair aqui.
   function temParaOndeVoltar() {
     if (!dados || con.semToken) return false;
-    return !!(confirmarEncerrar || telegram || envio || escolhendoBib || escolhendoJanela || novaReuniao || verOutras || verApp
+    return !!(confirmarEncerrar || telegram || envio || escolhendoBib || colocando || escolhendoJanela || novaReuniao || verOutras || verApp
       || (dados.estado.reuniaoId && dados.reuniao && !naInicio));
   }
   function guardarPasso() {
@@ -933,6 +948,9 @@
     abrirMusicas: () => { escolhendoMusica = true; },
     catMusica: el => { catMusica = el.dataset.v; },
     abrirEnvio: () => { envio = { status: 'escolher' }; },
+    abrirColocar: () => { colocando = true; },
+    fecharColocar: () => { colocando = false; },
+    abrirEnvioReuniao: () => { colocando = false; envio = { status: 'escolher', naReuniao: true }; },
     colocarRecebidos: () => {
       // Abre "Colocar na reunião" já com o que acabou de chegar marcado.
       const ids = envio.resultado.ids;
@@ -940,7 +958,7 @@
       escolhendoBib = { aba: primeiro ? primeiro.tipo : 'imagem', sel: [...ids] };
       envio = null;
     },
-    abrirBib: () => { escolhendoBib = { aba: 'imagem', sel: [] }; },
+    abrirBib: () => { colocando = false; escolhendoBib = { aba: 'imagem', sel: [] }; },
     fecharBib: () => { escolhendoBib = null; },
     abaBib: el => { escolhendoBib.aba = el.dataset.v; },
     marcarBib: el => {
