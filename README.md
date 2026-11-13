@@ -1,4 +1,4 @@
-# Púlpito
+# Altar
 
 **Programa para conduzir as reuniões da igreja pelo celular, projetando na TV.**
 
@@ -80,13 +80,40 @@ npm test
 
 ## Instalador (para o notebook da igreja)
 
-1. Gere o instalador: `npm run instalador` (cria `dist/Instalar-Pulpito-<versão>.exe`).
+1. Gere o instalador: `npm run instalador` (cria `dist/Instalar-Altar-<versão>.exe`). O comando também gera o aplicativo do celular e coloca dentro do instalador; por isso precisa do Android SDK e do Java 17 ou mais novo.
 2. Copie o `.exe` para o notebook da igreja (pendrive) e abra.
 3. O Windows avisa "O Windows protegeu o computador" (o programa não é assinado): clique em **Mais informações → Executar assim mesmo**.
 4. Pronto: o programa abre sozinho quando o notebook liga (dá para desligar em Configurações → Windows).
 
-Os dados (reuniões, Biblioteca, pastores) ficam em `%APPDATA%\auxilio-reuniao\dados` e continuam lá ao reinstalar ou atualizar.
-Para atualizar o programa: gere um instalador novo (suba a `version` no package.json) e instale por cima.
+Os dados (reuniões, Biblioteca, pastores) ficam em `%APPDATA%\altar\dados` e continuam lá ao reinstalar ou atualizar.
+
+### Atualização automática
+
+O programa instalado se atualiza sozinho: logo depois de abrir (e de 6 em 6 horas) ele procura a versão mais nova nas [Releases do GitHub](https://github.com/luizhenriqueperinif/altar/releases), baixa por trás e instala quando o programa fecha. Em Configurações → Atualização do programa dá para ver a versão, procurar na hora e clicar em **Atualizar agora** (o programa fecha e abre de novo). Ele nunca reinicia sozinho, e o botão não funciona com uma reunião aberta.
+
+Para soltar uma versão nova:
+
+1. Suba a `version` no package.json.
+2. `npm run publicar` (gera o instalador e publica a Release; precisa do GitHub CLI com login feito, `gh auth login`).
+
+Os notebooks com internet baixam a versão nova sozinhos. Um notebook novo instala uma vez pelo `.exe` da Release mais recente. A instalação manual pede permissão de administrador (regra do firewall); a atualização automática não pede.
+
+Para ensaiar pelo código, sem instalar nada: `ALTAR_TESTAR_ATUALIZACAO=1 npm start` (o programa finge ser uma versão antiga, procura e baixa de verdade, mas não instala).
+
+## Aplicativo do celular (Android)
+
+O celular não precisa de aplicativo: o QR code do Painel abre o controle no navegador. O aplicativo (`android/`) é o mesmo controle em tela cheia, com três confortos: guarda o endereço do notebook (o QR code é lido uma vez só), procura o notebook sozinho se o roteador trocar o endereço dele e não deixa a tela do celular apagar durante a reunião. As telas continuam vindo do notebook, então atualizar o programa do notebook não exige atualizar o aplicativo.
+
+O aplicativo vai dentro do programa do notebook; o pastor não precisa receber nenhum arquivo:
+
+1. Conecte o celular pelo QR code do Painel (abre o controle no navegador).
+2. Na tela inicial do controle, toque em **Instalar o aplicativo do Altar neste celular** e depois em **Baixar o aplicativo**. O arquivo vem do próprio notebook (`/app/Altar.apk`), sem internet.
+3. Abra o arquivo baixado e instale. O Android pede para permitir a instalação por aquele navegador, porque o aplicativo não vem da loja.
+4. De volta ao navegador, toque em **Abrir no aplicativo**: ele abre já conectado. (Ou abra o Altar no celular e toque em **Ler o QR code**.)
+
+Para gerar só o APK: `npm run apk` (sai em `android/app/build/outputs/apk/release/app-release.apk`).
+
+O APK é assinado com a chave de desenvolvimento do computador que o gerou. Uma atualização gerada em outro computador não instala por cima: é preciso desinstalar o aplicativo antigo e ler o QR code de novo.
 
 ## Autor
 

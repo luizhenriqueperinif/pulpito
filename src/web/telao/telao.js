@@ -17,7 +17,7 @@
   // Versículo: só redesenha quando muda o texto, a referência ou o fundo.
   let chaveVersiculo = '';
   function mostrarVersiculo(vs) {
-    const chave = JSON.stringify([vs.texto, vs.rotulo, vs.versao, vs.fundo]);
+    const chave = JSON.stringify([vs.texto, vs.rotulo, vs.fundo, vs.parte, vs.partes, vs.letraMax]);
     if (chave !== chaveVersiculo) {
       chaveVersiculo = chave;
       camadas.versiculo.innerHTML = window.Versiculo.html(vs, conexao.midia);
@@ -239,5 +239,5 @@
   };
 
   mostrarCamada('espera');
-  conexao =window.Auxilio.conectar({ papel: 'telao', aoReceber: m => m.tipo === 'estado' && aplicar(m), aoMudar: () => {} });
+  conexao =window.Altar.conectar({ papel: 'telao', aoReceber: m => m.tipo === 'estado' && aplicar(m), aoMudar: () => {} });
 })();

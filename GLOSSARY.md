@@ -1,4 +1,4 @@
-# Púlpito
+# Altar
 
 Sistema para o pastor preparar uma reunião no notebook e conduzi-la pelo celular, projetando o conteúdo na TV da igreja.
 

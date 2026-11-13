@@ -1,6 +1,6 @@
 // Vídeos do Telegram: o Telegram Desktop salva o que o pastor baixa numa pasta
 // (normalmente Downloads\Telegram Desktop). O celular mostra os vídeos dessa pasta
-// e o escolhido entra na Biblioteca e na reunião, passando no player do próprio Púlpito.
+// e o escolhido entra na Biblioteca e na reunião, passando no player do próprio Altar.
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');

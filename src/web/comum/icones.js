@@ -1,4 +1,4 @@
-// Ícones de linha do Púlpito (no lugar dos emojis): Icone('tv') devolve um <svg> pronto.
+// Ícones de linha do Altar (no lugar dos emojis): Icone('tv') devolve um <svg> pronto.
 (function () {
   const P = {
     imagem: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/>',

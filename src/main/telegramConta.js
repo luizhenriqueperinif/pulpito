@@ -1,5 +1,5 @@
-// Conta do Telegram ligada ao Púlpito: o pastor entra uma vez no notebook (número + código)
-// e depois escolhe, pelo celular, a conversa e o vídeo. O Púlpito só LÊ: lista conversas,
+// Conta do Telegram ligada ao Altar: o pastor entra uma vez no notebook (número + código)
+// e depois escolhe, pelo celular, a conversa e o vídeo. O Altar só LÊ: lista conversas,
 // lista os vídeos e baixa o escolhido. Nunca manda mensagem nem mexe em nada da conta.
 //
 // A parte que fala com o Telegram de verdade fica em `criarAdaptadorGram` (biblioteca GramJS);
@@ -317,7 +317,7 @@ function criarAdaptadorGram({ apiId, apiHash, sessao }) {
   const { Logger } = require('telegram/extensions');
   const client = new TelegramClient(new StringSession(sessao || ''), apiId, apiHash, {
     connectionRetries: 3,
-    deviceModel: 'Púlpito (notebook da igreja)',
+    deviceModel: 'Altar (notebook da igreja)',
     systemVersion: 'Windows',
     appVersion: '1.0.0',
     langCode: 'pt',

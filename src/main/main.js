@@ -6,13 +6,25 @@ const { execFile, execFileSync } = require('child_process');
 const { Dados, EXT_IMAGEM, EXT_VIDEO, EXT_AUDIO, tipoDoArquivo } = require('./dados');
 const { criarServidor } = require('./servidor');
 const { criarTeclas } = require('./teclas');
+const { criarLeitorPdf } = require('./pdf');
+const { criarPregacoes, resumoDasPregacoes, ehPdf } = require('./pregacoes');
+const { letraValida } = require('./partes');
+const { criarAtualizacao } = require('./atualizacao');
 const tg = require('./telegram');
 const { criarContaTelegram, criarAdaptadorGram } = require('./telegramConta');
 
 // Os dados ficam sempre na mesma pasta, rodando pelo código (npm start) ou instalado (.exe).
-app.setPath('userData', path.join(app.getPath('appData'), 'auxilio-reuniao'));
+// O programa já se chamou "Púlpito" e guardava tudo em "auxilio-reuniao": na primeira vez com o nome novo,
+// a pasta antiga é renomeada para "altar" (se não der, por estar em uso, continua usando a antiga).
+const pastaDados = (() => {
+  const nova = path.join(app.getPath('appData'), 'altar');
+  const antiga = path.join(app.getPath('appData'), 'auxilio-reuniao');
+  if (fs.existsSync(nova) || !fs.existsSync(antiga)) return nova;
+  try { fs.renameSync(antiga, nova); return nova; } catch { return antiga; }
+})();
+app.setPath('userData', pastaDados);
 
-// Abriu de novo com o Púlpito já aberto: esta cópia só traz a janela que já está aberta para a frente e fecha.
+// Abriu de novo com o Altar já aberto: esta cópia só traz a janela que já está aberta para a frente e fecha.
 const primeiraCopia = app.requestSingleInstanceLock();
 if (!primeiraCopia) app.quit();
 
@@ -126,7 +138,7 @@ function abrirTelaoDeTeste() {
 function abrirPainel() {
   painel = new BrowserWindow({
     width: 1280, height: 820, minWidth: 900, minHeight: 600,
-    title: TESTE ? 'Púlpito (modo de teste)' : 'Púlpito',
+    title: TESTE ? 'Altar (modo de teste)' : 'Altar',
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#0e0f12' : '#f4f5f7',
     autoHideMenuBar: true,
     webPreferences: { preload: path.join(__dirname, 'preload.js') },
@@ -148,9 +160,17 @@ function telasMudaram() {
   reabrirTimer = setTimeout(abrirTelao, 1500);
 }
 
+// PDF de palestra: cada página vira uma imagem (a janela escondida do leitor desenha).
+const leitorPdf = criarLeitorPdf({ urlDaPagina: () => urlLocal('pdf') });
+// Aplicativo do Android: o instalador leva o APK junto (package.json, extraResources); em desenvolvimento é o que o Gradle gerou.
+const CAMINHO_APK = app.isPackaged
+  ? path.join(process.resourcesPath, 'Altar.apk')
+  : path.join(__dirname, '..', '..', 'android', 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk');
+const opcoesPdf = { pdfParaImagens: leitorPdf.paraImagens, aoErrar: e => anotarErro('PDF', e) };
+
 /** Copia os arquivos para a Biblioteca e, se veio uma reunião, coloca no fim dela. */
 // comoFundo: true = fundo de versículo; 'espera' = vídeos e imagens para a Tela de espera.
-function importar(caminhos, reuniaoId, comoFundo) {
+async function importar(caminhos, reuniaoId, comoFundo) {
   if (comoFundo === 'espera') {
     const servem = caminhos.filter(c => ['video', 'imagem'].includes(tipoDoArquivo(c)));
     const r = dados.importarArquivos(servem, {});
@@ -158,11 +178,14 @@ function importar(caminhos, reuniaoId, comoFundo) {
     servidor.transmitir();
     return { qtd: r.novos.length, repetidos: r.repetidos.length, ignorados: r.ignorados + caminhos.length - servem.length, naReuniao: false };
   }
-  const { novos, repetidos, ignorados } = dados.importarArquivos(caminhos, { comoFundo: !!comoFundo });
+  // Um PDF no meio dos arquivos vira uma pregação (uma imagem por página). Como fundo não serve.
+  const pdfs = comoFundo ? [] : caminhos.filter(ehPdf);
+  const palestras = resumoDasPregacoes(await criarPregacoes(dados, pdfs, opcoesPdf));
+  const { novos, repetidos, ignorados } = dados.importarArquivos(caminhos.filter(c => !pdfs.includes(c)), { comoFundo: !!comoFundo });
   // Os repetidos não são copiados de novo, mas entram na reunião (se ela ainda não tiver).
-  if (reuniaoId && !comoFundo) dados.adicionarItens(reuniaoId, [...novos, ...repetidos].map(b => b.id), { semRepetir: true });
+  if (reuniaoId && !comoFundo) dados.adicionarItens(reuniaoId, [...novos, ...repetidos].map(b => b.id).concat(palestras.ids), { semRepetir: true });
   servidor.transmitir();
-  return { qtd: novos.length, repetidos: repetidos.length, ignorados, naReuniao: !!reuniaoId && !comoFundo };
+  return { qtd: novos.length + palestras.novas, repetidos: repetidos.length + palestras.qtd - palestras.novas, ignorados: ignorados + palestras.ignorados, naReuniao: !!reuniaoId && !comoFundo };
 }
 
 ipcMain.handle('importar-dialogo', async (_e, { reuniaoId, comoFundo } = {}) => {
@@ -170,27 +193,27 @@ ipcMain.handle('importar-dialogo', async (_e, { reuniaoId, comoFundo } = {}) => 
     ? { title: 'Escolha os vídeos e imagens da Tela de espera', properties: ['openFile', 'multiSelections'], filters: [{ name: 'Vídeos e imagens', extensions: [...EXT_VIDEO, ...EXT_IMAGEM] }] }
     : comoFundo
     ? { title: 'Escolha as imagens de fundo', properties: ['openFile', 'multiSelections'], filters: [{ name: 'Imagens', extensions: EXT_IMAGEM }] }
-    : { title: 'Escolha as fotos, vídeos e músicas', properties: ['openFile', 'multiSelections'], filters: [{ name: 'Fotos, vídeos e músicas', extensions: [...EXT_IMAGEM, ...EXT_VIDEO, ...EXT_AUDIO] }] });
+    : { title: 'Escolha as fotos, vídeos, músicas ou o PDF da palestra', properties: ['openFile', 'multiSelections'], filters: [{ name: 'Fotos, vídeos, músicas e PDF', extensions: [...EXT_IMAGEM, ...EXT_VIDEO, ...EXT_AUDIO, 'pdf'] }] });
   if (r.canceled || r.filePaths.length === 0) return null;
   return importar(r.filePaths, reuniaoId, comoFundo);
 });
 
-/** Pregação: o pastor escolhe todas as imagens do bispo de uma vez; viram um item só. */
+/** Pregação: o pastor escolhe todas as imagens do bispo de uma vez (ou o PDF da palestra); viram um item só. */
 ipcMain.handle('importar-pregacao', async (_e, { reuniaoId, caminhos } = {}) => {
   if (!Array.isArray(caminhos)) {
     const r = await dialog.showOpenDialog(painel, {
-      title: 'Escolha TODAS as imagens da pregação (segure Ctrl ou arraste para marcar várias)',
+      title: 'Escolha o PDF da palestra, ou TODAS as imagens da pregação (segure Ctrl para marcar várias)',
       properties: ['openFile', 'multiSelections'],
-      filters: [{ name: 'Imagens', extensions: EXT_IMAGEM }],
+      filters: [{ name: 'PDF ou imagens', extensions: ['pdf', ...EXT_IMAGEM] }],
     });
     if (r.canceled || r.filePaths.length === 0) return null;
     caminhos = r.filePaths;
   }
-  const feito = dados.criarPregacao(caminhos.filter(c => typeof c === 'string'));
-  if (!feito) return { qtd: 0, ignorados: caminhos.length };
-  if (reuniaoId) dados.adicionarItens(reuniaoId, [feito.pregacao.id], { semRepetir: true });
+  const r = resumoDasPregacoes(await criarPregacoes(dados, caminhos.filter(c => typeof c === 'string'), opcoesPdf));
+  if (!r.qtd) return r;
+  if (reuniaoId) dados.adicionarItens(reuniaoId, r.ids, { semRepetir: true });
   servidor.transmitir();
-  return { qtd: 1, imagens: feito.pregacao.arquivos.length, ignorados: feito.ignorados, pregacao: true, repetida: !!feito.repetida, titulo: feito.pregacao.titulo };
+  return r;
 });
 
 ipcMain.handle('importar-caminhos', (_e, { caminhos, reuniaoId, comoFundo } = {}) => {
@@ -260,7 +283,7 @@ ipcMain.handle('tela-espera-do-programa', () => { dados.voltarTelaEsperaDoProgra
 
 ipcMain.handle('atualizar-endereco', () => servidor.atualizarEndereco());
 
-// Janelas abertas no notebook que podem aparecer na TV (menos as do próprio Púlpito).
+// Janelas abertas no notebook que podem aparecer na TV (menos as do próprio Altar).
 async function listarJanelas(pequeno) {
   const minhas = new Set([painel, telao].filter(w => w && !w.isDestroyed()).map(w => w.getMediaSourceId()));
   const tam = pequeno ? { width: 320, height: 180 } : { width: 480, height: 270 };
@@ -291,6 +314,8 @@ ipcMain.handle('trocar-telas', () => {
 /** Abrir sozinho quando o notebook liga. Só vale no programa instalado (.exe). */
 function aplicarIniciarComWindows() {
   if (!app.isPackaged) return;
+  // Tira o "abrir junto com o Windows" deixado pelo nome antigo do programa (Púlpito).
+  try { app.setLoginItemSettings({ openAtLogin: false, name: 'electron.app.Púlpito' }); } catch {}
   app.setLoginItemSettings({ openAtLogin: dados.config.iniciarComWindows !== false });
 }
 
@@ -328,6 +353,49 @@ function devolverNotificacoes() {
   dados.config.notificacoesAntes = null;
   dados.salvar();
 }
+
+// ---------- Atualização automática ----------
+// Só no programa instalado. Para ver funcionando pelo código: ALTAR_TESTAR_ATUALIZACAO=1 npm start
+// (procura e baixa de verdade, fingindo ser uma versão antiga; a instalação em si só acontece no instalado).
+let atualizacao = null;
+function ligarAtualizacao() {
+  const ensaio = !app.isPackaged && !!process.env.ALTAR_TESTAR_ATUALIZACAO;
+  if (!app.isPackaged && !ensaio) return;
+  try {
+    const { autoUpdater } = require('electron-updater');
+    autoUpdater.logger = null;   // o que importa vai para o Painel e para o erros.log
+    if (ensaio) {
+      // O programa instalado traz um arquivo dizendo onde buscar (app-update.yml); no ensaio ele é feito aqui,
+      // com outra pasta de download para não misturar com a do programa instalado.
+      const { publish } = require('../../package.json').build;
+      const config = path.join(app.getPath('temp'), 'altar-ensaio-atualizacao.yml');
+      fs.writeFileSync(config, `provider: ${publish.provider}\nowner: ${publish.owner}\nrepo: ${publish.repo}\nupdaterCacheDirName: altar-updater-ensaio\n`);
+      autoUpdater.forceDevUpdateConfig = true;
+      autoUpdater.updateConfigPath = config;
+      // A versão "antiga de mentira" tem de ser feita com o mesmo semver que o electron-updater usa por dentro.
+      const semver = require(require.resolve('semver', { paths: [require.resolve('electron-updater')] }));
+      autoUpdater.currentVersion = new semver.SemVer('0.0.1');
+    }
+    atualizacao = criarAtualizacao({
+      atualizador: autoUpdater,
+      versaoAtual: app.getVersion(),
+      aoMudar: estado => { if (painel && !painel.isDestroyed()) painel.webContents.send('atualizacao-mudou', estado); },
+      aoErrar: e => anotarErro('Atualização', e),
+    });
+    // No ensaio (pelo código) nunca instala de verdade, nem ao fechar: só mostra a busca e o download.
+    if (ensaio) { autoUpdater.autoInstallOnAppQuit = false; atualizacao.instalar = () => false; }
+    atualizacao.iniciar();
+  } catch (e) {
+    anotarErro('Atualização', e);
+  }
+}
+ipcMain.handle('atualizacao-estado', () => (atualizacao ? atualizacao.estado() : { fase: 'desligada', versao: app.getVersion() }));
+ipcMain.handle('atualizacao-buscar', () => (atualizacao ? atualizacao.buscar() : null));
+ipcMain.handle('atualizacao-instalar', () => {
+  // No meio de uma reunião não reinicia (o Painel já esconde o botão; aqui é a garantia).
+  if (!atualizacao || servidor?.reuniaoAberta()) return false;
+  return atualizacao.instalar();
+});
 
 ipcMain.handle('opcoes', () => ({
   instalado: app.isPackaged,
@@ -389,6 +457,12 @@ ipcMain.handle('mudar-opcao', (_e, { nome, valor } = {}) => {
     dados.config.iniciarComWindows = !!valor;
     dados.salvar();
     aplicarIniciarComWindows();
+  }
+  if (nome === 'letraVersiculo') {
+    // Tamanho da letra do versículo na TV (ver src/main/partes.js).
+    dados.config.letraVersiculo = letraValida(valor);
+    dados.salvar();
+    servidor.transmitir();
   }
   if (nome === 'manterSomAcordado') {
     dados.config.manterSomAcordado = !!valor;
@@ -487,17 +561,20 @@ app.whenReady().then(async () => {
   dados = new Dados(path.join(app.getPath('userData'), 'dados'));
   servidor = criarServidor({
     dados,
-    janelas: { listar: () => listarJanelas(true), apertar: teclas.apertar },
+    janelas: { listar: () => listarJanelas(true), apertar: teclas.apertar, frente: teclas.frente },
     telegram: { pasta: pastaTelegram, pastaCapas: pastaCapasTelegram, aoPedir: () => setTimeout(tirarCapas, 300), conta: contaTelegram() },
+    ...opcoesPdf,
+    apk: CAMINHO_APK,
   });
   try {
     await servidor.iniciar();
   } catch (e) {
-    dialog.showErrorBox('Púlpito', `Não foi possível abrir a porta ${dados.config.porta}. O programa já está aberto?\n\n${e.message}`);
+    dialog.showErrorBox('Altar', `Não foi possível abrir a porta ${dados.config.porta}. O programa já está aberto?\n\n${e.message}`);
     app.quit();
     return;
   }
   abrirPainel();
+  ligarAtualizacao();
   // De tempos em tempos vê se chegou vídeo novo sem capa (do notebook ou do celular).
   setTimeout(tirarCapas, 3000);
   setInterval(tirarCapas, 8000);

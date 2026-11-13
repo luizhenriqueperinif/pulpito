@@ -20,7 +20,8 @@ const refValida = r => r && Number.isInteger(r.l) && Number.isInteger(r.c) && Nu
  *   musicaEspera(reuniaoId): string|null,  música que toca na tela de espera ao abrir a reunião
  *   versao(e): string,                       versão da Bíblia do que está na TV
  *   existe(versao, ref): boolean,
- *   vizinho(versao, ref, delta): object|null
+ *   vizinho(versao, ref, delta): object|null,
+ *   partes(versao, ref): number            em quantas telas o versículo aparece (letra grande); sem isso, 1
  * }} ctx
  */
 function aplicar(e, cmd, ctx) {
@@ -110,9 +111,17 @@ function aplicarComando(e, cmd, ctx) {
     case 'passoVersiculo': {
       // ◀ ▶ livres: valem para o avulso e para o versículo planejado.
       if (!e.tv.ref) return e;
-      const prox = ctx.vizinho(ctx.versao(e), e.tv.ref, Number(cmd.delta) || 0);
+      const delta = Number(cmd.delta) || 0, versao = ctx.versao(e);
+      const partes = ref => (ctx.partes ? ctx.partes(versao, ref) : 1);
+      const { parte = 0, ...tv } = e.tv;
+      // Versículo comprido ocupa mais de uma tela: a seta passa a tela antes de passar o versículo.
+      if (delta === 1 && parte + 1 < partes(tv.ref)) return { ...e, tv: { ...tv, parte: parte + 1 } };
+      if (delta === -1 && parte > 0) return { ...e, tv: parte > 1 ? { ...tv, parte: parte - 1 } : tv };
+      const prox = ctx.vizinho(versao, tv.ref, delta);
       if (!prox) return e;
-      return { ...e, tv: { ...e.tv, ref: prox } };
+      // Voltando, cai na última tela do versículo anterior (é a ordem da leitura).
+      const ultima = delta === -1 ? partes(prox) - 1 : 0;
+      return { ...e, tv: ultima > 0 ? { ...tv, ref: prox, parte: ultima } : { ...tv, ref: prox } };
     }
 
     case 'irVersiculo': {
@@ -123,7 +132,8 @@ function aplicarComando(e, cmd, ctx) {
       for (const k of ['l', 'c', 'v']) ref[k] = Number(ref[k]);
       const igual = ref.l === e.tv.ref.l && ref.c === e.tv.ref.c && ref.v === e.tv.ref.v;
       if (igual || !refValida(ref) || !ctx.existe(ctx.versao(e), ref)) return e;
-      return { ...e, tv: { ...e.tv, ref } };
+      const { parte, ...tv } = e.tv;   // outro versículo começa sempre na primeira tela
+      return { ...e, tv: { ...tv, ref } };
     }
 
     case 'mostrarJanela': {

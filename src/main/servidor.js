@@ -10,6 +10,8 @@ const { estadoInicial, aplicar } = require('./conducao');
 const biblia = require('./biblia');
 const tg = require('./telegram');
 const tgConta = require('./telegramConta');
+const { criarPregacoes, resumoDasPregacoes, ehPdf } = require('./pregacoes');
+const { dividirVersiculo, limiteDaLetra, maxDaLetra, letraValida } = require('./partes');
 
 const RAIZ = path.join(__dirname, '..', '..');
 const PASTAS_ESTATICAS = {
@@ -18,6 +20,9 @@ const PASTAS_ESTATICAS = {
   painel: path.join(RAIZ, 'src', 'web', 'painel'),
   comum: path.join(RAIZ, 'src', 'web', 'comum'),
   fontes: path.join(RAIZ, 'node_modules', '@fontsource'),
+  // Leitor de PDF (palestras): a página escondida do notebook e a biblioteca que desenha as páginas.
+  pdf: path.join(RAIZ, 'src', 'web', 'pdf'),
+  pdfjs: path.join(RAIZ, 'node_modules', 'pdfjs-dist'),
 };
 const TIPOS = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
@@ -27,6 +32,8 @@ const TIPOS = {
   '.mp3': 'audio/mpeg', '.m4a': 'audio/mp4', '.aac': 'audio/aac', '.wav': 'audio/wav', '.ogg': 'audio/ogg', '.oga': 'audio/ogg',
   '.opus': 'audio/ogg', '.flac': 'audio/flac',
   '.woff2': 'font/woff2',
+  '.mjs': 'text/javascript; charset=utf-8', '.wasm': 'application/wasm',
+  '.apk': 'application/vnd.android.package-archive',
 };
 
 /** Endereço do Notebook no Wi-Fi (o que vai no QR code). */
@@ -53,7 +60,7 @@ function mandar(leitura, res) {
   leitura.pipe(res);
 }
 
-function enviarArquivo(req, res, arquivo) {
+function enviarArquivo(req, res, arquivo, cabecalhos = {}) {
   fs.stat(arquivo, (err, st) => {
     if (err || !st.isFile()) { res.writeHead(404); res.end(); return; }
     const tipo = TIPOS[path.extname(arquivo).toLowerCase()] || 'application/octet-stream';
@@ -64,13 +71,13 @@ function enviarArquivo(req, res, arquivo) {
       const fim = range[2] ? Math.min(parseInt(range[2], 10), st.size - 1) : st.size - 1;
       if (inicio >= st.size || inicio > fim) { res.writeHead(416, { 'Content-Range': `bytes */${st.size}` }); res.end(); return; }
       res.writeHead(206, {
-        'Content-Type': tipo, 'Accept-Ranges': 'bytes',
+        ...cabecalhos, 'Content-Type': tipo, 'Accept-Ranges': 'bytes',
         'Content-Range': `bytes ${inicio}-${fim}/${st.size}`, 'Content-Length': fim - inicio + 1,
       });
       mandar(fs.createReadStream(arquivo, { start: inicio, end: fim }), res);
       return;
     }
-    res.writeHead(200, { 'Content-Type': tipo, 'Content-Length': st.size, 'Accept-Ranges': 'bytes', 'Cache-Control': 'no-cache' });
+    res.writeHead(200, { ...cabecalhos, 'Content-Type': tipo, 'Content-Length': st.size, 'Accept-Ranges': 'bytes', 'Cache-Control': 'no-cache' });
     mandar(fs.createReadStream(arquivo), res);
   });
 }
@@ -78,7 +85,9 @@ function enviarArquivo(req, res, arquivo) {
 /** Muda a cada vez que o programa abre: as páginas usam para saber que precisam recarregar. */
 const INICIO = Date.now().toString(36);
 
-function criarServidor({ dados, janelas = null, telegram = null }) {
+function criarServidor({ dados, janelas = null, telegram = null, pdfParaImagens = null, apk = null, aoErrar = () => {} }) {
+  // O aplicativo do Android vai junto com o programa do notebook; o celular baixa daqui (ver /app/Altar.apk).
+  const temApk = !!apk && fs.existsSync(apk);
   const porta = dados.config.porta;
   const token = dados.config.token;
   let estado = estadoInicial();
@@ -102,7 +111,11 @@ function criarServidor({ dados, janelas = null, telegram = null }) {
     return r ? r.versao : 'ACF';
   }
 
+  /** As telas do versículo na TV: uma só, ou mais de uma quando a letra é grande e o versículo é comprido. */
+  const telasDoVersiculo = (versao, ref) => dividirVersiculo(biblia.texto(versao, ref), limiteDaLetra(dados.config.letraVersiculo));
+
   const ctx = {
+    partes: (v, r) => telasDoVersiculo(v, r).length,
     reuniaoExiste: id => !!dados.reuniao(id),
     musicaEspera: rid => dados.musicaEspera(rid),
     item: (rid, iid) => dados.item(rid, iid),
@@ -137,16 +150,21 @@ function criarServidor({ dados, janelas = null, telegram = null }) {
     let planejado = null;
     const p = passagemNaTv(estado);
     if (p) planejado = { id: p.id, titulo: p.titulo, dentro: ref.l === p.ref.l && ref.c === p.ref.c && ref.v >= p.ref.v && ref.v <= p.ate };
+    const telas = telasDoVersiculo(versao, ref);
+    const parte = Math.min(estado.tv.parte || 0, telas.length - 1);
     return {
       ref, versao,
-      texto: biblia.texto(versao, ref),
+      texto: telas[parte],
+      parte, partes: telas.length,
+      letraMax: maxDaLetra(dados.config.letraVersiculo),
       rotulo: biblia.rotulo(ref),
       capitulo: `${biblia.nomeLivro(ref.l)} ${ref.c}`,
       qtdCap: biblia.qtdVersos(versao, ref.l, ref.c),
       capAnterior: capituloVizinho(versao, ref, -1),
       capProximo: capituloVizinho(versao, ref, 1),
-      anterior: ant && biblia.rotulo(ant),
-      proximo: prox && biblia.rotulo(prox),
+      // O que as setas do celular fazem: passam a tela do versículo comprido antes de passar o versículo.
+      anterior: parte > 0 ? `volta · ${parte}/${telas.length}` : ant && biblia.rotulo(ant),
+      proximo: parte + 1 < telas.length ? `continua · ${parte + 2}/${telas.length}` : prox && biblia.rotulo(prox),
       avulso: estado.tv.tipo === 'avulso',
       planejado,
       fundo: reuniao ? reuniao.fundo : { pronto: 'ceu' },
@@ -179,7 +197,7 @@ function criarServidor({ dados, janelas = null, telegram = null }) {
     destino.on('error', erro);
   }
 
-  function terminarEnvio(res, u) {
+  async function terminarEnvio(res, u) {
     const lote = u.searchParams.get('lote');
     const modo = u.searchParams.get('modo');
     const reuniaoId = u.searchParams.get('reuniao');
@@ -192,18 +210,22 @@ function criarServidor({ dados, janelas = null, telegram = null }) {
     let resposta;
     try {
       if (modo === 'pregacao') {
-        const feito = caminhos.length ? dados.criarPregacao(caminhos, { manterOrdem: true }) : null;
-        if (feito && reuniaoId && dados.reuniao(reuniaoId)) dados.adicionarItens(reuniaoId, [feito.pregacao.id], { semRepetir: true });
-        resposta = feito
-          ? { qtd: 1, imagens: feito.pregacao.arquivos.length, ignorados: feito.ignorados, ids: [feito.pregacao.id], repetida: !!feito.repetida, titulo: feito.pregacao.titulo }
-          : { qtd: 0, ignorados: caminhos.length, ids: [] };
+        // Imagens soltas viram uma pregação; cada PDF (palestra) vira outra, com uma imagem por página.
+        resposta = resumoDasPregacoes(await criarPregacoes(dados, caminhos, { manterOrdem: true, pdfParaImagens, aoErrar }));
+        if (resposta.ids.length && reuniaoId && dados.reuniao(reuniaoId)) dados.adicionarItens(reuniaoId, resposta.ids, { semRepetir: true });
       } else {
-        const { novos, repetidos, ignorados } = dados.importarArquivos(caminhos);
-        const todos = [...novos, ...repetidos].map(b => b.id);
+        // Um PDF no meio das fotos e vídeos também vira pregação.
+        const pdfs = caminhos.filter(ehPdf);
+        const palestras = resumoDasPregacoes(await criarPregacoes(dados, pdfs, { pdfParaImagens, aoErrar }));
+        const { novos, repetidos, ignorados } = dados.importarArquivos(caminhos.filter(c => !ehPdf(c)));
+        const todos = [...novos, ...repetidos].map(b => b.id).concat(palestras.ids);
         if (todos.length && reuniaoId && dados.reuniao(reuniaoId)) dados.adicionarItens(reuniaoId, todos, { semRepetir: true });
         // ids: os novos e os que já estavam (o pastor pode querer colocar na reunião do mesmo jeito)
-        resposta = { qtd: novos.length, repetidos: repetidos.length, ignorados, ids: todos };
+        resposta = { qtd: novos.length + palestras.novas, repetidos: repetidos.length + palestras.qtd - palestras.novas, ignorados: ignorados + palestras.ignorados, ids: todos };
       }
+    } catch (e) {
+      aoErrar(e);
+      resposta = { qtd: 0, ignorados: caminhos.length, ids: [] };
     } finally {
       fs.rmSync(pastaLote, { recursive: true, force: true });
     }
@@ -234,7 +256,7 @@ function criarServidor({ dados, janelas = null, telegram = null }) {
       const v = encodeURIComponent(dados.config.logo || 'padrao');
       res.writeHead(200, { 'Content-Type': TIPOS['.webmanifest'], 'Cache-Control': 'no-cache' });
       res.end(JSON.stringify({
-        id: '/controle/', name: 'Púlpito', short_name: 'Púlpito', lang: 'pt-BR',
+        id: '/controle/', name: 'Altar', short_name: 'Altar', lang: 'pt-BR',
         display: 'standalone', orientation: 'portrait', background_color: '#0e0f12', theme_color: '#d70a10',
         icons: [
           { src: `/icone-app.png?v=${v}`, sizes: '512x512', type: 'image/png', purpose: 'any' },
@@ -244,13 +266,20 @@ function criarServidor({ dados, janelas = null, telegram = null }) {
       return;
     }
 
-    // "Você é o Púlpito?": uma página antiga do celular (de quando o notebook tinha outro endereço
+    // Aplicativo do Android: sem senha (não tem nada de secreto nele) para o download do navegador não falhar.
+    if (u.pathname === '/app/Altar.apk') {
+      if (!temApk) { res.writeHead(404); res.end(); return; }
+      enviarArquivo(req, res, apk, { 'Content-Disposition': 'attachment; filename="Altar.apk"' });
+      return;
+    }
+
+    // "Você é o Altar?": uma página antiga do celular (de quando o notebook tinha outro endereço
     // na rede) pergunta isso a cada endereço da rede até achar o notebook e se reconectar.
     if (u.pathname === '/ola') {
       const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Private-Network': 'true', 'Cache-Control': 'no-store' };
       if (req.method === 'OPTIONS') { res.writeHead(204, { ...cors, 'Access-Control-Allow-Methods': 'GET' }); res.end(); return; }
       res.writeHead(200, { ...cors, 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ pulpito: true, meu: u.searchParams.get('t') === token }));
+      res.end(JSON.stringify({ altar: true, pulpito: true /* páginas antigas do celular ainda perguntam assim */, meu: u.searchParams.get('t') === token }));
       return;
     }
 
@@ -334,7 +363,7 @@ function criarServidor({ dados, janelas = null, telegram = null }) {
       nomesReunioes: [...new Set(dados.reunioes.map(r => r.nome).filter(Boolean))].slice(-12),
       biblioteca: dados.biblioteca.filter(b => b.tipo !== 'fundo').map(b => ({ id: b.id, tipo: b.tipo, titulo: b.titulo, arquivo: b.arquivo, capa: b.capa || undefined, criadoEm: b.criadoEm, qtd: b.arquivos ? b.arquivos.length : undefined })),
       recentes: dados.recentes(reuniao?.pastorId).map(r => ({ ...r, rotulo: biblia.rotulo(r) })),
-      info: { inicio: INICIO, url, qrSvg, tv: tvStatus, telas, celulares: celularesConectados(), telaEspera: dados.config.telaEspera, musicaEspera: dados.config.musicaEspera || null, espera: dados.telaEspera(estado.reuniaoId), logo: dados.config.logo || null },
+      info: { inicio: INICIO, url, qrSvg, tv: tvStatus, telas, celulares: celularesConectados(), telaEspera: dados.config.telaEspera, musicaEspera: dados.config.musicaEspera || null, espera: dados.telaEspera(estado.reuniaoId), logo: dados.config.logo || null, app: temApk, letraVersiculo: letraValida(dados.config.letraVersiculo) },
     };
     if (completo) {
       // Só o Painel precisa de tudo para preparar as reuniões.
@@ -536,6 +565,9 @@ function criarServidor({ dados, janelas = null, telegram = null }) {
     const novo = aplicar(estado, cmd, ctx);
     if (novo === estado) return;
     estado = novo;
+    // O navegador para de desenhar quando a janela fica coberta por outra (na TV fica cinza, só o som sai):
+    // por isso a janela que vai para a TV vem para a frente no notebook.
+    if (cmd.cmd === 'mostrarJanela' && janelas && janelas.frente) Promise.resolve().then(() => janelas.frente(estado.tv.fonteId)).catch(() => {});
     // Guarda em "Últimos usados" do pastor o versículo que acabou de abrir.
     if (['mostrarVersiculo', 'mostrar', 'mostrarPassagem'].includes(cmd.cmd) && estado.tv.ref) {
       dados.lembrarVersiculo(dados.reuniao(estado.reuniaoId)?.pastorId, estado.tv.ref);
@@ -590,6 +622,8 @@ function criarServidor({ dados, janelas = null, telegram = null }) {
     }),
     atualizarEndereco,
     transmitir,
+    /** Tem reunião acontecendo? (a atualização do programa não reinicia no meio dela) */
+    reuniaoAberta: () => !!estado.reuniaoId,
     /** Chegou imagem nova de vídeo do Telegram: o celular que está com a lista aberta pede de novo. */
     avisarTelegram() { for (const c of wss.clients) if (c.papel === 'controle') mandar(c, { tipo: 'telegramMudou' }); },
     definirTv(status, qtdTelas) { tvStatus = status; telas = qtdTelas || 1; transmitir(); },

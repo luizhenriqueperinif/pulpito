@@ -277,14 +277,15 @@ class Dados {
    * Pregação: várias imagens (as que o bispo mandou) guardadas juntas, na ordem do nome.
    * Fica na Biblioteca como uma coisa só.
    * manterOrdem: usa a ordem recebida (vindas do celular, na ordem em que o pastor marcou).
+   * marca: quando as imagens vieram de um PDF, a marca é a do PDF (para reconhecer o mesmo PDF de novo).
    */
-  criarPregacao(caminhos, { titulo, manterOrdem = false } = {}) {
+  criarPregacao(caminhos, { titulo, manterOrdem = false, marca: marcaDada = null } = {}) {
     const imagens = caminhos.filter(c => tipoDoArquivo(c) === 'imagem');
     if (!manterOrdem) imagens.sort((a, b) => path.basename(a).localeCompare(path.basename(b), 'pt-BR', { numeric: true }));
     if (!imagens.length) return null;
     // A mesma pregação (mesmas imagens, na mesma ordem) já está na Biblioteca: usa a que já tem.
-    const marca = marcaDaPregacao(imagens.map(marcaDoArquivo));
-    const existente = this._porMarca().get('pregacao|' + marca);
+    const marca = marcaDada || marcaDaPregacao(imagens.map(marcaDoArquivo));
+    const existente = this.pregacaoPorMarca(marca);
     if (existente) return { pregacao: existente, ignorados: caminhos.length - imagens.length, repetida: true };
     const arquivos = imagens.map(c => {
       const nome = id() + path.extname(c).toLowerCase();
@@ -304,6 +305,11 @@ class Dados {
     this.d.biblioteca.push(b);
     this.salvar();
     return { pregacao: b, ignorados: caminhos.length - imagens.length };
+  }
+
+  /** A pregação que já está na Biblioteca com esta marca (ou null). */
+  pregacaoPorMarca(marca) {
+    return this._porMarca().get('pregacao|' + marca) || null;
   }
 
   // ---------- Categorias de música ("Oração forte", "Fundo de busca"...) ----------
@@ -791,4 +797,4 @@ function migrarDaVersao1(v1) {
   };
 }
 
-module.exports = { Dados, tipoDoArquivo, tituloDoArquivo, somarDias, dataLocal, EXT_IMAGEM, EXT_VIDEO, EXT_AUDIO, VERSOES, FUNDOS_PRONTOS };
+module.exports = { Dados, tipoDoArquivo, tituloDoArquivo, marcaDoArquivo, somarDias, dataLocal, EXT_IMAGEM, EXT_VIDEO, EXT_AUDIO, VERSOES, FUNDOS_PRONTOS };

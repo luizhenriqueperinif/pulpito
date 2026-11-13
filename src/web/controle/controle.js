@@ -11,6 +11,7 @@
   let con = { conectado: false };
   let confirmarEncerrar = false;
   let verOutras = false;
+  let verApp = false;   // passos para instalar o aplicativo do Android (tela inicial)
   let escolhendo = null;       // { etapa: 'livro'|'cap'|'vers', test: 'AT'|'NT', l, c } escolhendo versículo
   let palavraAberta = false;   // painel da Palavra aberto (setas + passagens preparadas)
   let pregacaoAberta = false;  // painel da Pregação aberto (◀ ▶ + miniaturas)
@@ -28,7 +29,7 @@
   let chaveTela = '';          // para não redesenhar tudo só porque o tempo do vídeo andou
   const indices = {};          // livros e capítulos de cada versão (vem do notebook uma vez)
 
-  const conexao = window.Auxilio.conectar({
+  const conexao = window.Altar.conectar({
     papel: 'controle',
     local,
     aoReceber: m => {
@@ -128,7 +129,7 @@
 
 
 
-  // Som, fixo embaixo: tocar/pausar, a barrinha para adiantar ou voltar e o volume da TV.
+  // Som, fixo embaixo enquanto algo toca: tocar/pausar, a barrinha para adiantar ou voltar e o volume da TV.
   function hud() {
     const e = dados.estado, a = e.audio, v = e.video, it = itemNaTv();
     let midia = '', x = null, k = '';
@@ -144,15 +145,15 @@
         ? `<button class="btn" data-cmd="videoPausar" aria-label="Pausar o vídeo">${I('pause')}</button>`
         : `<button class="btn primary" data-cmd="videoContinuar" aria-label="${v.terminou ? 'Passar de novo' : 'Continuar o vídeo'}">${I(v.terminou ? 'denovo' : 'play')}</button>`}
         <div class="hud-nome">${esc(it.titulo)}</div>`;
-    } else midia = '<div class="hud-nome apagado">Nada tocando</div>';
+    } else return '';   // nada tocando: a faixa do som some e a lista ganha o espaço
     let barra = '';
-    if (x && x.dur) {
+    if (x.dur) {
       const pct = Math.min(100, (x.t / x.dur) * 100);
       barra = `<div class="hud-seek">
         <div class="bar seek" data-seek="${k}" data-dur="${x.dur}" role="slider" aria-label="Adiantar ou voltar" aria-valuemin="0" aria-valuemax="${Math.round(x.dur)}" aria-valuenow="${Math.round(x.t || 0)}"><i data-prog="${k}" style="width:${pct}%"></i><b class="pino" style="left:${pct}%"></b></div>
         <span class="hud-t"><span data-tempo="${k}">${mmss(x.t)}</span> / ${mmss(x.dur)}</span></div>`;
     }
-    return `<div class="hud${x ? '' : ' sem-midia'}">${midia}
+    return `<div class="hud">${midia}
       <div class="hud-vol">
         <button class="btn" data-cmd="volume" data-delta="-1" aria-label="Diminuir volume">${I('menos')}</button>
         <div class="hud-n" aria-label="Volume ${e.volume} de 10">${e.volume}</div>
@@ -189,10 +190,10 @@
       <span class="v">${esc(dia)}${r.pastor ? esc(tituloReuniao(r)) + ' · ' : ''}${r.qtd} ${r.qtd === 1 ? 'item' : 'itens'}</span></button>`;
   }
 
-  // Topo com a logo da igreja (ou a cruz do Púlpito) e o nome do programa.
+  // Topo com a logo da igreja (ou a cruz do Altar) e o nome do programa.
   function marca() {
     const logo = dados && dados.info && dados.info.logo;
-    return `<div class="marca-cel"><img class="marca-logo" src="${logo ? '/logo.png?v=' + encodeURIComponent(logo) : '/comum/icone.svg'}" alt="">Púlpito</div>`;
+    return `<div class="marca-cel"><img class="marca-logo" src="${logo ? '/logo.png?v=' + encodeURIComponent(logo) : '/comum/icone.svg'}" alt="">Altar</div>`;
   }
 
   // O ícone do app no celular acompanha a logo (muda o endereço para o celular não usar a antiga).
@@ -229,6 +230,27 @@
       <button class="btn primary" data-acao="novaReuniao">${I('mais')} Criar reunião agora</button>
       ${dados.estado.tv.tipo === 'janela' ? '' : `<button class="btn" data-acao="abrirJanelas">${I('janela')} Mostrar uma janela do notebook</button>`}
       <button class="btn" data-acao="abrirEnvio">${I('enviar')} Mandar fotos, vídeos ou músicas para a Biblioteca</button>
+      ${cartaoApp()}
+    </div>`;
+  }
+
+  // Celular Android aberto pelo navegador: oferece o aplicativo, que vem dentro do programa do notebook.
+  function cartaoApp() {
+    if (noApp() || !dados.info || !dados.info.app || !/Android/i.test(navigator.userAgent)) return '';
+    if (!verApp) return `<button class="btn" data-acao="app">Instalar o aplicativo do Altar neste celular</button>`;
+    // O segundo botão abre o aplicativo já conectado a este notebook (sem ler o QR code de novo).
+    // Se o aplicativo ainda não foi instalado, o navegador só volta para esta página (em vez de abrir a loja).
+    const abrir = `intent://${location.host}/controle/?t=${encodeURIComponent(conexao.token)}#Intent;scheme=http;package=br.igreja.altar;S.browser_fallback_url=${encodeURIComponent(location.href)};end`;
+    return `<div class="app-cel">
+      <h2>Aplicativo do Altar</h2>
+      <ol>
+        <li>Toque em <strong>Baixar o aplicativo</strong>. Se o celular avisar que o arquivo pode ser perigoso, toque em <strong>Baixar mesmo assim</strong>.</li>
+        <li>Abra o arquivo baixado e toque em <strong>Instalar</strong>. Se o celular pedir, permita instalar por este navegador.</li>
+        <li>Volte aqui e toque em <strong>Abrir no aplicativo</strong>.</li>
+      </ol>
+      <a class="btn primary" href="/app/Altar.apk" download="Altar.apk">${I('descer')} Baixar o aplicativo</a>
+      <a class="btn" href="${esc(abrir)}">Abrir no aplicativo</a>
+      <button class="btn" data-acao="app">${I('fechar')} Fechar</button>
     </div>`;
   }
 
@@ -415,6 +437,7 @@
   function listaReuniao() {
     const r = dados.reuniao, e = dados.estado;
     return `${controleJanela()}
+      <div class="m-reuniao"><b>${esc(tituloReuniao(r))}</b><span>${esc([pastorDe(r), r.hora].filter(Boolean).join(' · '))}</span></div>
       <div class="eyebrow">Toque para mostrar na TV</div>
       <div class="cards">${r.itens.length ? r.itens.map(cartao).join('') : '<p class="note">Esta reunião ainda não tem itens.</p>'}</div>
       <section class="mais-opcoes" aria-label="Colocar ou mostrar outras coisas">
@@ -483,12 +506,13 @@
     const rodape = vs.avulso
       ? `<button class="btn huge" data-cmd="voltarReuniao">${I('voltar')} Voltar para a reunião</button>`
       : '';
-    return `<h2 class="m-titulo">${esc(vs.rotulo)} · ${esc(vs.versao)}</h2>
+    return `<h2 class="m-titulo">${esc(vs.rotulo)} · ${esc(vs.versao)}${vs.partes > 1 ? ` · ${vs.parte + 1}/${vs.partes}` : ''}</h2>
         <div class="capbar">
           <button class="btn" data-cmd="passoVersiculo" data-delta="-1" ${vs.anterior ? '' : 'disabled'}>${I('esq')}<small>${esc(vs.anterior || 'início')}</small></button>
           <button class="btn atual" data-acao="abrirCapitulos">${esc(vs.capitulo)}<small>trocar capítulo ou livro</small></button>
           <button class="btn primary" data-cmd="passoVersiculo" data-delta="1" ${vs.proximo ? '' : 'disabled'}>${I('dir')}<small>${esc(vs.proximo || 'fim')}</small></button>
         </div>
+        <div class="leitura" aria-label="Texto que está na TV"><p>${esc(vs.texto)}</p></div>
         ${aviso ? `<p class="note">${aviso}</p>` : ''}
         ${gradeCapitulo(vs, palavra)}
         ${preparados}
@@ -546,12 +570,13 @@
       const onde = 'Estão na Biblioteca do notebook.';
       const msg = e.modo === 'pregacao'
         ? (r.repetida ? `Essa pregação já estava na Biblioteca ("${r.titulo}"). Não foi copiada de novo.`
-          : r.qtd ? `A pregação com ${r.imagens} imagens chegou no notebook. ${onde}` : 'Nenhuma imagem chegou. A pregação precisa de fotos.')
+          : r.qtd > 1 ? `${r.qtd} pregações chegaram no notebook, com ${r.imagens} imagens ao todo. ${onde}`
+          : r.qtd ? `A pregação com ${r.imagens} imagens chegou no notebook. ${onde}` : 'Não deu certo. A pregação precisa de fotos ou de um PDF.')
         : (r.qtd ? `${r.qtd} ${r.qtd === 1 ? 'arquivo chegou' : 'arquivos chegaram'} no notebook. ${onde}`
           : r.repetidos ? 'Esses arquivos já estavam na Biblioteca.' : 'Nenhum arquivo chegou.');
       corpo = `<div class="envio-andamento"><div class="grande">${I(r.qtd || r.repetidos || r.repetida ? 'ok' : 'alerta')}</div><h3>${esc(msg)}</h3>
           ${r.qtd && r.repetidos ? `<p class="note">${r.repetidos} ${r.repetidos === 1 ? 'já estava' : 'já estavam'} na Biblioteca e não ${r.repetidos === 1 ? 'foi copiado' : 'foram copiados'} de novo.</p>` : ''}
-          ${r.ignorados ? `<p class="note">${r.ignorados} ${r.ignorados === 1 ? 'arquivo não era' : 'arquivos não eram'} foto, vídeo ou música e ${r.ignorados === 1 ? 'ficou' : 'ficaram'} de fora.</p>` : ''}
+          ${r.ignorados ? `<p class="note">${r.ignorados} ${r.ignorados === 1 ? 'arquivo não era' : 'arquivos não eram'} foto, vídeo, música ou PDF e ${r.ignorados === 1 ? 'ficou' : 'ficaram'} de fora.</p>` : ''}
           ${dados.reuniao && r.ids && r.ids.length
             ? `<button class="btn primary huge" data-acao="colocarRecebidos">${I('biblioteca')} Colocar na reunião agora</button>
                <button class="btn huge" data-acao="fecharEnvio">Agora não</button>`
@@ -564,9 +589,9 @@
       corpo = `<p class="note">Os arquivos vão para a Biblioteca do notebook. Depois é só colocar na reunião.</p>
         <div class="eyebrow">O que vai mandar?</div>
         <label class="btn primary huge envio-btn">${I('imagem')} Fotos, vídeos e músicas
-          <input type="file" data-envio="arquivos" accept="image/*,video/*,audio/*" multiple hidden></label>
-        <label class="btn huge envio-btn">${I('pregacao')} Imagens da pregação<small>marque todas, na ordem; viram uma pregação só</small>
-          <input type="file" data-envio="pregacao" accept="image/*" multiple hidden></label>`;
+          <input type="file" data-envio="arquivos" accept="image/*,video/*,audio/*,application/pdf" multiple hidden></label>
+        <label class="btn huge envio-btn">${I('pregacao')} Pregação ou palestra<small>o PDF da palestra, ou todas as imagens na ordem; vira uma pregação só</small>
+          <input type="file" data-envio="pregacao" accept="image/*,application/pdf" multiple hidden></label>`;
     }
     const ocupado = e.status === 'enviando';
     return `<div class="painel" role="dialog" aria-label="Mandar para o notebook">
@@ -706,16 +731,22 @@
       <ol><li>No notebook, clique em <b>Conectar celular</b>.</li>
         <li>Abra a câmera do celular e aponte para o QR code.</li>
         <li>Toque no link que aparecer.</li></ol>
-      <span class="note">Confira também se o Púlpito está aberto no notebook e se o celular está no Wi-Fi da igreja.</span>
+      <span class="note">Confira também se o Altar está aberto no notebook e se o celular está no Wi-Fi da igreja.</span>
       <button class="btn primary" data-acao="procurarDeNovo">${I('procurar')} Tentar achar o notebook de novo</button></div>`;
     if (con.procurando) return '<div class="aviso">Procurando o notebook na rede… só um instante.</div>';
     return '<div class="aviso">Procurando o notebook… Confira se o celular está no Wi-Fi da igreja.</div>';
   }
 
+  // Dentro do aplicativo do Android (android/), a página pode pedir ao app para ler o QR code.
+  const noApp = () => !!(window.AltarApp && window.AltarApp.lerQr);
+
   function telaSemToken() {
-    return `<div class="pad escolher"><div class="marca-cel"><img class="marca-logo" src="/comum/icone.svg" alt="">Púlpito</div>
+    return `<div class="pad escolher"><div class="marca-cel"><img class="marca-logo" src="/comum/icone.svg" alt="">Altar</div>
       <h1>Leia o QR code que aparece no notebook</h1>
-      <p class="note">Abra a câmera do celular, aponte para o QR code na tela do notebook e toque no link que aparecer.</p></div>`;
+      ${noApp()
+        ? `<p class="note">O código deste celular não vale mais. Leia de novo o QR code na tela do notebook.</p>
+           <button class="btn primary huge" data-acao="lerQrNoApp">Ler o QR code</button>`
+        : '<p class="note">Abra a câmera do celular, aponte para o QR code na tela do notebook e toque no link que aparecer.</p>'}</div>`;
   }
 
   function telaConfirmar() {
@@ -794,17 +825,18 @@
     }
     if (naReuniao && (palavraAberta || pregacaoAberta || escolhendoMusica)) { palavraAberta = false; pregacaoAberta = false; escolhendoMusica = false; return true; }
     if (naReuniao) { naInicio = true; return true; }
+    if (verApp) { verApp = false; return true; }
     if (verOutras) { verOutras = false; return true; }
     return false;
   }
   // Tem para onde voltar? Então deixa um passo a mais no histórico do navegador para o voltar cair aqui.
   function temParaOndeVoltar() {
     if (!dados || con.semToken) return false;
-    return !!(confirmarEncerrar || telegram || envio || escolhendoBib || escolhendoJanela || novaReuniao || verOutras
+    return !!(confirmarEncerrar || telegram || envio || escolhendoBib || escolhendoJanela || novaReuniao || verOutras || verApp
       || (dados.estado.reuniaoId && dados.reuniao && !naInicio));
   }
   function guardarPasso() {
-    try { if (temParaOndeVoltar() && !(history.state && history.state.pulpito)) history.pushState({ pulpito: 1 }, ''); } catch {}
+    try { if (temParaOndeVoltar() && !(history.state && history.state.altar)) history.pushState({ altar: 1 }, ''); } catch {}
   }
   window.addEventListener('popstate', () => {
     if (voltarUmPasso()) { desenhar(true); guardarPasso(); }
@@ -875,7 +907,9 @@
     navMusica: () => { escolhendoMusica = true; escolhendo = null; palavraAberta = false; pregacaoAberta = false; },
     encerrar: () => { confirmarEncerrar = true; },
     cancelar: () => { confirmarEncerrar = false; },
+    lerQrNoApp: () => { if (noApp()) window.AltarApp.lerQr(); },
     outras: () => { verOutras = !verOutras; },
+    app: () => { verApp = !verApp; },
     novaReuniao: () => {
       const p = dados.pastores || [];
       novaReuniao = { pastorId: p.length === 1 ? p[0].id : null, nome: '' };

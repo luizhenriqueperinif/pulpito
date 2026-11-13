@@ -5,7 +5,7 @@ const os = require('os');
 const path = require('path');
 const { Dados, tipoDoArquivo, somarDias } = require('../src/main/dados');
 
-const pastaTemp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'auxilio-teste-'));
+const pastaTemp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'altar-teste-'));
 
 function arquivos(...nomes) {
   const p = pastaTemp();
@@ -445,7 +445,7 @@ test('tirar um fundo do programa: some da lista, a reunião que usava volta para
 test('música da espera: padrão, da reunião, sem música, e some se apagar a música', () => {
   const fs = require('fs'), os = require('os'), path = require('path');
   const { Dados } = require('../src/main/dados');
-  const d = new Dados(fs.mkdtempSync(path.join(os.tmpdir(), 'pulpito-me-')));
+  const d = new Dados(fs.mkdtempSync(path.join(os.tmpdir(), 'altar-me-')));
   const m1 = { id: 'm1', tipo: 'musica', titulo: 'Hino', arquivo: 'm1.mp3' };
   const m2 = { id: 'm2', tipo: 'musica', titulo: 'Oração', arquivo: 'm2.mp3' };
   d.d.biblioteca.push(m1, m2, { id: 'i1', tipo: 'imagem', titulo: 'x', arquivo: 'i1.png' });
@@ -471,7 +471,7 @@ test('música da espera: padrão, da reunião, sem música, e some se apagar a m
 test('tela de espera com vídeo: da Biblioteca ou o arquivo padrão', () => {
   const fs = require('fs'), os = require('os'), path = require('path');
   const { Dados } = require('../src/main/dados');
-  const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'pulpito-ev-'));
+  const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'altar-ev-'));
   const d = new Dados(pasta);
   d.d.biblioteca.push({ id: 'v1', tipo: 'video', titulo: 'Fundo animado', arquivo: 'v1.mp4', capa: 'capa-v1.jpg' });
   const r = d.criarReuniao({ data: '2026-11-03', hora: '18:00' });
@@ -486,7 +486,7 @@ test('tela de espera com vídeo: da Biblioteca ou o arquivo padrão', () => {
 test('marcar vídeo ou imagem para aparecer na escolha da tela de espera', () => {
   const fs = require('fs'), os = require('os'), path = require('path');
   const { Dados } = require('../src/main/dados');
-  const d = new Dados(fs.mkdtempSync(path.join(os.tmpdir(), 'pulpito-me2-')));
+  const d = new Dados(fs.mkdtempSync(path.join(os.tmpdir(), 'altar-me2-')));
   d.d.biblioteca.push({ id: 'v1', tipo: 'video', titulo: 'a', arquivo: 'v1.mp4' }, { id: 'm1', tipo: 'musica', titulo: 'b', arquivo: 'm1.mp3' });
   d.marcarParaEspera('v1', true);
   assert.equal(d.arquivoDaBiblioteca('v1').espera, true);
@@ -499,7 +499,7 @@ test('marcar vídeo ou imagem para aparecer na escolha da tela de espera', () =>
 test('tirar uma foto do programa da tela de espera: some da lista, a reunião volta para a padrão, e dá para trazer de volta', () => {
   const fs = require('fs'), os = require('os'), path = require('path');
   const { Dados, FUNDOS_PRONTOS } = require('../src/main/dados');
-  const d = new Dados(fs.mkdtempSync(path.join(os.tmpdir(), 'pulpito-ee-')));
+  const d = new Dados(fs.mkdtempSync(path.join(os.tmpdir(), 'altar-ee-')));
   const foto = FUNDOS_PRONTOS[8];
   const r = d.criarReuniao({ data: '2026-11-03', hora: '18:00' });
   d.editarReuniao(r.id, { telaEspera: foto });

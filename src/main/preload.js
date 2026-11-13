@@ -23,4 +23,9 @@ contextBridge.exposeInMainWorld('notebook', {
   tgEstado: () => ipcRenderer.invoke('tg-estado'),
   tgAcao: (acao, a, b) => ipcRenderer.invoke('tg-acao', { acao, a, b }),
   aoMudarTelegram: f => ipcRenderer.on('telegram-mudou', () => f()),
+  /** Atualização automática do programa (src/main/atualizacao.js). */
+  atualizacao: () => ipcRenderer.invoke('atualizacao-estado'),
+  buscarAtualizacao: () => ipcRenderer.invoke('atualizacao-buscar'),
+  instalarAtualizacao: () => ipcRenderer.invoke('atualizacao-instalar'),
+  aoMudarAtualizacao: f => ipcRenderer.on('atualizacao-mudou', (_e, estado) => f(estado)),
 });

@@ -26,7 +26,7 @@ test('teclas da janela: no YouTube K, J e L; nos outros espaço e setas', () => 
 });
 
 test('celular pede as janelas e só mexe na que está na TV', async () => {
-  const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'pulpito-teclas-'));
+  const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'altar-teclas-'));
   const d = new Dados(pasta); d.config.porta = 7600 + Math.floor(Math.random() * 300);
   const apertos = [];
   const janelas = {

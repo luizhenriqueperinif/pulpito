@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<title>Púlpito</title>
+<title>Altar</title>
 <link rel="icon" href="/comum/icone.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/comum/base.css">
 <link rel="stylesheet" href="/comum/versiculo.css">
@@ -10,7 +10,7 @@
 </head>
 <body>
   <aside class="lado">
-    <div class="marca"><span id="marca-img"></span><div><b>Púlpito</b><small>Reuniões na TV</small></div></div>
+    <div class="marca"><span id="marca-img"></span><div><b>Altar</b><small>Reuniões na TV</small></div></div>
     <nav class="abas" id="abas" aria-label="Seções">
       <button data-aba="reunioes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16" rx="3"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg>Reuniões</button>
       <button data-aba="biblioteca"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg>Biblioteca</button>
@@ -19,6 +19,7 @@
       <button data-aba="config" class="depois-sep"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>Configurações</button>
     </nav>
     <div id="janela-tv"></div>
+    <div id="aviso-atualizacao"></div>
     <div class="status" id="status"></div>
   </aside>
 
@@ -36,7 +37,8 @@
             <li>O celular precisa estar no <strong>mesmo Wi-Fi</strong> deste notebook.</li>
             <li>Abra a <strong>câmera</strong> do celular e aponte para o QR code.</li>
             <li>Toque no link que aparecer.</li>
-            <li>No menu do navegador, toque em <strong>"Adicionar à tela inicial"</strong>. Das próximas vezes, é só tocar no ícone.</li>
+            <li id="passo-app" hidden>Celular Android: na tela que abrir, toque em <strong>"Instalar o aplicativo do Altar neste celular"</strong> e siga os passos. Das próximas vezes, é só abrir o aplicativo.</li>
+            <li id="passo-atalho">No menu do navegador, toque em <strong>"Adicionar à tela inicial"</strong>. Das próximas vezes, é só tocar no ícone.</li>
           </ol>
           <div class="url" id="url"></div>
           <div class="acoes"><button class="btn" id="atualizar">Atualizar endereço</button></div>

@@ -32,7 +32,7 @@ function numeroDaJanela(fonteId) {
 
 const CODIGO = `
 using System; using System.Runtime.InteropServices; using System.Threading;
-public static class PulpitoTeclas {
+public static class AltarTeclas {
   [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr h);
   [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
   [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr h, int c);
@@ -43,7 +43,7 @@ public static class PulpitoTeclas {
   [DllImport("user32.dll")] static extern bool AttachThreadInput(uint a, uint b, bool f);
   [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
   [DllImport("user32.dll")] static extern void keybd_event(byte vk, byte sc, uint f, UIntPtr e);
-  public static string Apertar(long numero, int vk) {
+  public static string Frente(long numero) {
     IntPtr h = new IntPtr(numero);
     if (!IsWindow(h)) return "fechada";
     if (IsIconic(h)) ShowWindow(h, 9);
@@ -54,7 +54,11 @@ public static class PulpitoTeclas {
       AttachThreadInput(eu, frente, false);
       Thread.Sleep(80);
     }
-    if (GetForegroundWindow() != h) return "semfoco";
+    return GetForegroundWindow() == h ? "ok" : "semfoco";
+  }
+  public static string Apertar(long numero, int vk) {
+    string r = Frente(numero);
+    if (r != "ok") return r;
     uint ext = (vk == 0x25 || vk == 0x27) ? 1u : 0u;
     keybd_event((byte)vk, 0, ext, UIntPtr.Zero);
     keybd_event((byte)vk, 0, ext | 2u, UIntPtr.Zero);
@@ -74,7 +78,7 @@ function criarTeclas() {
       let i;
       while ((i = buffer.indexOf('\n')) >= 0) {
         const linha = buffer.slice(0, i).trim(); buffer = buffer.slice(i + 1);
-        const m = /^PULPITO (\w+)$/.exec(linha);
+        const m = /^ALTAR (\w+)$/.exec(linha);
         if (m && fila.length) fila.shift()(m[1]);
       }
     });
@@ -86,20 +90,31 @@ function criarTeclas() {
     ps.stdin.write(`Add-Type -TypeDefinition ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${b64}')))\n`);
   }
 
-  /** Aperta a tecla do botão `acao` na janela. Responde 'ok', 'semfoco', 'fechada' ou 'erro'. */
-  function apertar(fonteId, nomeJanela, acao) {
-    const n = numeroDaJanela(fonteId), vk = teclaPara(acao, nomeJanela);
-    if (!n || vk == null || process.platform !== 'win32') return Promise.resolve('erro');
+  function pedir(chamada) {
     if (!ps) abrir();
     return new Promise(ok => {
       const t = setTimeout(() => { const k = fila.indexOf(fim); if (k >= 0) fila.splice(k, 1); ok('erro'); }, 4000);
       const fim = r => { clearTimeout(t); ok(r); };
       fila.push(fim);
-      ps.stdin.write(`Write-Output ("PULPITO " + [PulpitoTeclas]::Apertar(${n}, ${vk}))\n`);
+      ps.stdin.write(`Write-Output ("ALTAR " + [AltarTeclas]::${chamada})\n`);
     });
   }
 
-  return { apertar, fechar() { if (ps) { try { ps.kill(); } catch {} ps = null; } } };
+  /** Aperta a tecla do botão `acao` na janela. Responde 'ok', 'semfoco', 'fechada' ou 'erro'. */
+  function apertar(fonteId, nomeJanela, acao) {
+    const n = numeroDaJanela(fonteId), vk = teclaPara(acao, nomeJanela);
+    if (!n || vk == null || process.platform !== 'win32') return Promise.resolve('erro');
+    return pedir(`Apertar(${n}, ${vk})`);
+  }
+
+  /** Traz a janela para a frente no notebook (e desminimiza), sem apertar nada. */
+  function frente(fonteId) {
+    const n = numeroDaJanela(fonteId);
+    if (!n || process.platform !== 'win32') return Promise.resolve('erro');
+    return pedir(`Frente(${n})`);
+  }
+
+  return { apertar, frente, fechar() { if (ps) { try { ps.kill(); } catch {} ps = null; } } };
 }
 
 module.exports = { criarTeclas, teclaPara, numeroDaJanela, ehTelegram };

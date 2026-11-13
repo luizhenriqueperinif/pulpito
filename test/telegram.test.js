@@ -6,7 +6,7 @@ const path = require('path');
 const { listarVideos, caminhoDoVideo, nomeDaCapa } = require('../src/main/telegram');
 
 function pasta() {
-  const p = fs.mkdtempSync(path.join(os.tmpdir(), 'pulpito-tg-'));
+  const p = fs.mkdtempSync(path.join(os.tmpdir(), 'altar-tg-'));
   const criar = (nome, kb, minutosAtras) => {
     const c = path.join(p, nome);
     fs.writeFileSync(c, Buffer.alloc(kb * 1024));
@@ -48,8 +48,8 @@ test('celular pega vídeo do Telegram: entra na Biblioteca, na reunião e na TV'
   const { Dados } = require('../src/main/dados');
   const { criarServidor } = require('../src/main/servidor');
   const tg = pasta();
-  const capas = fs.mkdtempSync(path.join(os.tmpdir(), 'pulpito-tgcapas-'));
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'pulpito-tgdados-'));
+  const capas = fs.mkdtempSync(path.join(os.tmpdir(), 'altar-tgcapas-'));
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'altar-tgdados-'));
   const d = new Dados(base); d.config.porta = 7600 + Math.floor(Math.random() * 300);
   const r = d.criarReuniao({});
   const s = criarServidor({ dados: d, telegram: { pasta: () => tg, pastaCapas: () => capas } });
@@ -99,7 +99,7 @@ test('conta do Telegram: celular escolhe conversa e vídeo, baixa uma vez só e 
   const WebSocket = require('ws');
   const { Dados } = require('../src/main/dados');
   const { criarServidor } = require('../src/main/servidor');
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'pulpito-tgconta-'));
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'altar-tgconta-'));
   const d = new Dados(base); d.config.porta = 7600 + Math.floor(Math.random() * 300);
   const r = d.criarReuniao({});
   let baixou = 0;
@@ -110,7 +110,7 @@ test('conta do Telegram: celular escolhe conversa e vídeo, baixa uma vez só e 
     miniatura: async () => null,
     baixar: async (c, m, prog) => {
       baixou++; prog(40); prog(100);
-      const p = fs.mkdtempSync(path.join(os.tmpdir(), 'pulpito-tgbx-'));
+      const p = fs.mkdtempSync(path.join(os.tmpdir(), 'altar-tgbx-'));
       const arquivo = path.join(p, 'Testemunho.mp4'); fs.writeFileSync(arquivo, Buffer.alloc(50000, 7));
       return { arquivo, pasta: p, titulo: 'Testemunho' };
     },

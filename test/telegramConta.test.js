@@ -40,7 +40,7 @@ function falso({ precisaSenha = false } = {}) {
 }
 
 function nova(ad) {
-  const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'pulpito-conta-'));
+  const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'altar-conta-'));
   const conta = criarContaTelegram({
     arquivo: path.join(pasta, 'telegram.bin'), pastaCache: path.join(pasta, 'cache'),
     cifrar: s => Buffer.from('X' + s), decifrar: b => String(b).slice(1),
@@ -129,7 +129,7 @@ test('Telegram: baixa em pedaços ao mesmo tempo e monta o arquivo certinho', as
   const { baixarEmPedacos } = require('../src/main/telegramConta');
   const total = 5 * 512 * 1024 + 1234;
   const original = Buffer.alloc(total); for (let i = 0; i < total; i++) original[i] = (i * 31) % 251;
-  const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'pulpito-pedacos-'));
+  const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'altar-pedacos-'));
   const arquivo = path.join(pasta, 'v.mp4');
   let aoMesmoTempo = 0, maximo = 0; const progresso = [];
   await baixarEmPedacos({

@@ -152,7 +152,7 @@ body { min-height: 100vh; min-height: 100dvh; }
 .bib-ja { padding: 0 10px; font-size: 13px; color: var(--muted); }
 .painel > .toolbar { position: static; }
 
-/* ---------- Visual Púlpito (tema Universal) ---------- */
+/* ---------- Visual Altar (tema Universal) ---------- */
 .marca-cel { display: flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 800; letter-spacing: -.01em; color: var(--accent); }
 .marca-cel .marca-logo { width: 32px; height: 32px; border-radius: 8px; }
 .top .nome { font-size: 24px; font-weight: 800; letter-spacing: -.01em; }
@@ -237,13 +237,11 @@ body { min-height: 100vh; min-height: 100dvh; }
 
 /* Som, fixo embaixo */
 .hud { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 14px; background: var(--surface-2); }
-.hud.sem-midia { grid-template-columns: minmax(0, 1fr) auto; }
 .hud .btn { min-height: 0; width: 42px; height: 42px; padding: 0; border-radius: 50%; border: 0; background: var(--surface); color: var(--navy); }
 .hud > .btn:first-child { width: 48px; height: 48px; background: var(--navy); color: var(--navy-ink); }
 .hud > .btn:first-child .i { width: 24px; height: 24px; }
 .hud .btn.primary { background: var(--navy); color: var(--navy-ink); }
 .hud-nome { font-weight: 700; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.hud-nome.apagado { color: var(--muted); font-weight: 600; padding-left: 6px; }
 .hud-vol { display: grid; grid-template-columns: 42px auto 42px; gap: 4px; align-items: center; }
 .hud-n { font-weight: 700; font-size: 18px; text-align: center; min-width: 26px; }
 .hud-seek { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 4px 6px 2px 12px; }
@@ -418,6 +416,12 @@ body { min-height: 100vh; min-height: 100dvh; }
 /* Lista de reuniões com uma reunião ainda aberta (voltou pelo botão do celular) */
 .reuniao-aberta { display: grid; gap: 6px; padding: 12px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--line-2); }
 .reuniao-aberta .note { margin: 0; font-weight: 700; }
+/* Passos para instalar o aplicativo do Android (tela inicial, só no navegador do celular) */
+.app-cel { display: grid; gap: 10px; padding: 14px; border-radius: 16px; background: var(--surface-2); border: 1px solid var(--line-2); }
+.app-cel h2 { margin: 0; font-size: 22px; color: var(--navy); }
+.app-cel ol { margin: 0; padding-left: 24px; display: grid; gap: 8px; font-size: 18px; line-height: 1.4; }
+a.btn { text-decoration: none; color: inherit; }
+a.btn.primary { color: var(--on-accent); }
 /* Fim da lista da reunião: os outros botões numa caixa separada (modelo B) */
 .mais-opcoes { display: grid; gap: 8px; margin-top: 10px; padding: 12px; border-radius: 16px; background: var(--surface-2); border: 1px solid var(--line-2); }
 .mais-tit { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 16px; color: var(--navy); padding: 0 2px 2px; }
@@ -425,3 +429,24 @@ body { min-height: 100vh; min-height: 100dvh; }
 .mais-opcoes .btn { justify-content: flex-start; text-align: left; background: var(--surface); }
 .encerrar-sozinho { margin-top: 14px; }
 @media (min-width: 860px) { .mais-opcoes { max-width: 720px; } .m-meio > .encerrar-sozinho { min-width: 420px; } }
+
+/* ---------- Celular: o meio é o que importa ---------- */
+/* Em cima fica só uma linha (a TV, o que está nela e o botão de apagar); o nome da reunião vai para o começo da lista. */
+.m-cab { display: none; }
+.m-agora { background: transparent; padding: 0; }
+.m-tv .tv { box-shadow: 0 0 0 1px #4a5a82; }
+.m-reuniao { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 0 4px; min-width: 0; }
+.m-reuniao b { font-family: var(--font-titulo); font-size: 20px; line-height: 1.2; color: var(--navy); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-reuniao span { font-size: 15px; color: var(--muted); flex: none; }
+@media (min-width: 860px) {
+  .m-cab { display: flex; }
+  .m-agora { background: var(--navy-2); padding: 12px; }
+  .m-reuniao { display: none; }
+  .m-apagar { width: 100%; }
+}
+
+/* Versículo para o pastor ler no celular: o mesmo texto que está na TV, com letra grande. */
+/* Fica logo abaixo das setas, que não saem do lugar quando o versículo é comprido. */
+.leitura { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--navy); border-radius: 12px; padding: 14px 16px; }
+.leitura p { margin: 0; font-family: "Atkinson Hyperlegible", var(--font, sans-serif); font-size: 23px; line-height: 1.45; color: var(--ink); overflow-wrap: anywhere; }
+@media (min-width: 860px) { .leitura { max-width: 720px; } .leitura p { font-size: 26px; } }

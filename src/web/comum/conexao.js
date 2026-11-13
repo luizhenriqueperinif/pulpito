@@ -1,6 +1,15 @@
 // Conexão com o Notebook, usada pelas três telas. Reconecta sozinha se cair.
 (function () {
-  const CHAVE = 'auxilio-token';
+  const CHAVE = 'altar-token';
+
+  // O celular que já estava ligado (quando o programa tinha outro nome) continua ligado.
+  try {
+    const antigo = localStorage.getItem('auxilio-token');
+    if (antigo) {
+      if (!localStorage.getItem(CHAVE)) localStorage.setItem(CHAVE, antigo);
+      localStorage.removeItem('auxilio-token');
+    }
+  } catch (e) {}
 
   function lerToken() {
     const daUrl = new URLSearchParams(location.search).get('t');
@@ -12,7 +21,7 @@
   }
 
   // O notebook mudou de endereço na rede (o roteador às vezes troca): a página antiga do celular
-  // pergunta a cada endereço da mesma rede "você é o Púlpito?" e, achando, vai para o endereço novo.
+  // pergunta a cada endereço da mesma rede "você é o Altar?" e, achando, vai para o endereço novo.
   async function procurarNotebook(token) {
     const m = /^(\d+\.\d+\.\d+)\.(\d+)$/.exec(location.hostname);
     if (!m) return null;
@@ -27,7 +36,7 @@
       try {
         const r = await fetch(`http://${h}:${porta}/ola?t=${encodeURIComponent(token)}`, { signal: ac.signal, cache: 'no-store' });
         const j = await r.json();
-        if (j && j.pulpito && j.meu && !achou) achou = h;
+        if (j && j.altar && j.meu && !achou) achou = h;
       } catch (e) {} finally { clearTimeout(limite); }
     };
     for (let i = 0; i < hosts.length && !achou; i += 50) await Promise.all(hosts.slice(i, i + 50).map(testar));
@@ -103,5 +112,5 @@
     };
   }
 
-  window.Auxilio = { conectar };
+  window.Altar = { conectar };
 })();

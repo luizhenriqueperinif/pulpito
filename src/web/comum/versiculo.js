@@ -39,10 +39,14 @@
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
   /** HTML do versículo. Depois de colocar na página, chame Versiculo.ajustar(elemento). */
-  function html({ texto, rotulo, versao, fundo }, midia) {
+  // Na TV aparece só a referência ("João 3:16"), sem a sigla da versão (ACF, NVI...).
+  // letraMax: a maior letra que pode usar, em fração da altura da tela (vem de Configurações).
+  function html({ texto, rotulo, fundo, parte, partes, letraMax }, midia) {
     const f = estiloFundo(fundo, midia);
-    return `<div class="vs ${f.escuro ? 'vs-escuro' : ''}" style='background:${f.bg}' data-vs>
-      <div class="vs-caixa"><p class="vs-texto">${esc(texto)}</p><div class="vs-ref">${esc(rotulo)}${versao ? ' · ' + esc(versao) : ''}</div></div></div>`;
+    // Versículo comprido em mais de uma tela: "1/2" ao lado da referência.
+    const tela = partes > 1 ? ` · ${(parte || 0) + 1}/${partes}` : '';
+    return `<div class="vs ${f.escuro ? 'vs-escuro' : ''}" style='background:${f.bg}' data-vs data-max="${Number(letraMax) || 0.13}">
+      <div class="vs-caixa"><p class="vs-texto">${esc(texto)}</p><div class="vs-ref">${esc(rotulo)}${tela}</div></div></div>`;
   }
 
   /** Diminui a letra até o versículo inteiro caber, sem cortar. */
@@ -56,7 +60,7 @@
       if (!altura || !largura) continue;
       ref.style.fontSize = Math.max(10, Math.round(altura * 0.045)) + 'px';
       caixa.style.padding = `${Math.round(altura * 0.07)}px ${Math.round(largura * 0.07)}px`;
-      let min = 8, max = Math.round(altura * 0.13);
+      let min = 8, max = Math.round(altura * (Number(vs.dataset.max) || 0.13));
       while (max - min > 1) {
         const meio = Math.floor((min + max) / 2);
         texto.style.fontSize = meio + 'px';

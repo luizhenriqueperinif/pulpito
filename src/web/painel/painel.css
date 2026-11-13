@@ -227,6 +227,10 @@ main > * { max-width: 1180px; margin-inline: auto; }
 .janela-viva { padding: 10px 12px; border-radius: var(--radius-sm); background: var(--live-bg); color: var(--live); display: grid; gap: 2px; }
 .janela-viva small { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
 .janela-viva b { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Aviso de versão nova já baixada (lateral, em qualquer aba) */
+.atu-lado { display: grid; gap: 8px; padding: 12px; border-radius: var(--radius-sm); background: rgba(255, 255, 255, .08); border: 1px solid rgba(255, 255, 255, .16); font-size: 15px; }
+.atu-lado small { font-size: 13px; opacity: .85; }
+.atu-lado .btn { min-height: 48px; font-size: 16px; }
 .dicas { margin: 0; padding-left: 22px; display: grid; gap: 4px; font-size: 16px; color: var(--muted); }
 .janelas { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
 .janela-op { display: grid; gap: 8px; padding: 10px; border-radius: var(--radius-sm); border: 2px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; text-align: left; font: inherit; }

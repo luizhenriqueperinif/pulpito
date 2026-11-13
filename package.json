@@ -1,19 +1,23 @@
 {
-  "name": "auxilio-reuniao",
-  "version": "1.0.0",
+  "name": "altar",
+  "version": "1.1.1",
   "private": true,
-  "description": "Púlpito: prepara a reunião no notebook e conduz pelo celular, projetando na TV da igreja.",
+  "description": "Altar: prepara a reunião no notebook e conduz pelo celular, projetando na TV da igreja.",
   "main": "src/main/main.js",
   "scripts": {
     "start": "electron .",
     "tv": "electron . --tv",
     "test": "node --test \"test/*.test.js\"",
-    "instalador": "electron-builder --win nsis"
+    "apk": "cd android && .\\gradlew.bat assembleRelease -q",
+    "instalador": "npm run apk && electron-builder --win nsis --publish never",
+    "publicar": "node scripts/publicar.js"
   },
   "dependencies": {
     "@fontsource/atkinson-hyperlegible": "^5.3.0",
     "@fontsource/plus-jakarta-sans": "^5.3.0",
     "@fontsource/source-serif-4": "^5.3.1",
+    "electron-updater": "6.8.11",
+    "pdfjs-dist": "6.5.438",
     "qrcode": "^1.5.4",
     "telegram": "2.26.22",
     "ws": "^8.22.1"
@@ -25,7 +29,7 @@
   "author": "Luiz Henrique",
   "build": {
     "appId": "br.igreja.auxilioreuniao",
-    "productName": "Púlpito",
+    "productName": "Altar",
     "directories": {
       "output": "dist",
       "buildResources": "build"
@@ -33,13 +37,28 @@
     "files": [
       "src/**/*",
       "package.json",
-      "!src/**/*.md"
+      "!src/**/*.md",
+      "!node_modules/pdfjs-dist/{legacy,web,types,image_decoders}/**",
+      "!node_modules/pdfjs-dist/build/*.map",
+      "!node_modules/pdfjs-dist/build/{pdf,pdf.worker,pdf.renderer,pdf.sandbox}.mjs",
+      "!node_modules/pdfjs-dist/build/pdf.{renderer,sandbox}.min.mjs"
     ],
+    "extraResources": [
+      {
+        "from": "android/app/build/outputs/apk/release/app-release.apk",
+        "to": "Altar.apk"
+      }
+    ],
+    "publish": {
+      "provider": "github",
+      "owner": "luizhenriqueperinif",
+      "repo": "altar"
+    },
     "npmRebuild": false,
     "win": {
       "target": "nsis",
       "icon": "build/icon.png",
-      "executableName": "Pulpito"
+      "executableName": "Altar"
     },
     "nsis": {
       "oneClick": false,
@@ -47,10 +66,10 @@
       "allowToChangeInstallationDirectory": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Púlpito",
+      "shortcutName": "Altar",
       "runAfterFinish": true,
       "deleteAppDataOnUninstall": false,
-      "artifactName": "Instalar-Pulpito-${version}.${ext}"
+      "artifactName": "Instalar-Altar-${version}.${ext}"
     }
   }
 }

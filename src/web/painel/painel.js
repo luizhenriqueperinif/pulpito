@@ -37,7 +37,7 @@
   // ---------- conexão ----------
   let seq = 0;
   const esperando = new Map();
-  const conexao = window.Auxilio.conectar({
+  const conexao = window.Altar.conectar({
     papel: 'painel',
     aoReceber: m => {
       if (m.tipo === 'estado') receber(m);
@@ -85,12 +85,13 @@
     const cel = i.celulares > 0 ? linha('ok', `${i.celulares} ${i.celulares === 1 ? 'celular conectado' : 'celulares conectados'}`) : linha('', 'Nenhum celular');
     const agora = M.reuniao ? linha('ok vivo', `Ao vivo: ${esc(tituloReuniao(M.reuniao))}`) : '';
     $('status').innerHTML = agora + tv + cel;
+    avisoAtualizacao();
     // Botão de mostrar uma janela do notebook na TV (Telegram, Univervideo...): sempre à mão.
     const naTv = M.estado && M.estado.tv.tipo === 'janela';
     $('janela-tv').innerHTML = naTv ? `<div class="janela-viva"><small>Na TV agora</small><b>${esc(M.estado.tv.nome)}</b></div>
-          <button class="btn primary bloco" data-a="sairJanela">${I('voltar')} Voltar para o Púlpito</button>`
+          <button class="btn primary bloco" data-a="sairJanela">${I('voltar')} Voltar para o Altar</button>`
       : `<button class="btn bloco lado-btn" data-a="abrirJanelas">${I('tv')} Mostrar uma janela na TV</button>`;
-    // Logo da igreja (ou a cruz do Púlpito)
+    // Logo da igreja (ou a cruz do Altar)
     if (i.logo !== ultimaLogo) {
       ultimaLogo = i.logo;
       $('marca-img').innerHTML = i.logo
@@ -99,6 +100,9 @@
     }
     if (i.qrSvg !== ultimoQr) { $('qr').innerHTML = i.qrSvg; ultimoQr = i.qrSvg; }
     $('url').textContent = i.url;
+    // Com o aplicativo do Android dentro do programa, o atalho do navegador fica só para o iPhone.
+    $('passo-app').hidden = !i.app;
+    $('passo-atalho').firstChild.textContent = i.app ? 'iPhone: no menu do navegador, toque em ' : 'No menu do navegador, toque em ';
   }
 
   // ---------- desenho principal ----------
@@ -283,7 +287,7 @@
   // Como mostrar cada tipo: músicas sempre em linhas; vídeos e imagens o pastor escolhe (fica guardado neste notebook).
   const VISAO_ESCOLHE = ['video', 'imagem'];
   let visoes = {};
-  try { visoes = JSON.parse(localStorage.getItem('pulpito-visao') || '{}'); } catch {}
+  try { visoes = JSON.parse(localStorage.getItem('altar-visao') || localStorage.getItem('pulpito-visao') || '{}'); } catch {}
   function visao(tipo) {
     if (tipo === 'musica') return 'lista';
     if (VISAO_ESCOLHE.includes(tipo)) return visoes[tipo] === 'lista' ? 'lista' : 'grade';
@@ -410,7 +414,7 @@
       ${S.bibAba === 'musica' ? barraCategorias() : ''}
       ${S.bibAba === 'espera' ? '' : trocaVisao(S.bibAba)}
       ${S.bibAba === 'espera' ? abaEspera() : S.bibAba === 'fundo' ? abaFundos(lista) : lista.length ? porDia(lista, undefined, S.bibAba)
-        : `<div class="vazio"><div class="grande">${I(S.bibAba === 'fundo' ? 'fundo' : 'biblioteca')}</div><div>${S.bibAba === 'video' ? 'Nenhum vídeo ainda.' : S.bibAba === 'musica' ? 'Nenhuma música ainda. Hinos, louvores e fundos de oração ficam guardados aqui para sempre.' : S.bibAba === 'pregacao' ? 'Nenhuma pregação ainda. Use "+ Nova pregação" e escolha todas as imagens que o bispo mandou.' : S.bibAba === 'fundo' ? 'Nenhum fundo próprio ainda. Os fundos que vêm no programa aparecem na hora de escolher o fundo da reunião.' : 'Nenhuma imagem ainda.'}</div></div>`}
+        : `<div class="vazio"><div class="grande">${I(S.bibAba === 'fundo' ? 'fundo' : 'biblioteca')}</div><div>${S.bibAba === 'video' ? 'Nenhum vídeo ainda.' : S.bibAba === 'musica' ? 'Nenhuma música ainda. Hinos, louvores e fundos de oração ficam guardados aqui para sempre.' : S.bibAba === 'pregacao' ? 'Nenhuma pregação ainda. Use "+ Nova pregação" e escolha o PDF da palestra ou todas as imagens que o bispo mandou.' : S.bibAba === 'fundo' ? 'Nenhum fundo próprio ainda. Os fundos que vêm no programa aparecem na hora de escolher o fundo da reunião.' : 'Nenhuma imagem ainda.'}</div></div>`}
     </div>`;
   }
 
@@ -617,7 +621,7 @@
         </ol>
         ${corpo}
       </div>
-      <footer><button class="btn" data-a="recarregarJanelas">${I('procurar')} Procurar de novo</button><span class="note">Para voltar: toque em qualquer cartão no celular ou em "Voltar para o Púlpito".</span></footer>
+      <footer><button class="btn" data-a="recarregarJanelas">${I('procurar')} Procurar de novo</button><span class="note">Para voltar: toque em qualquer cartão no celular ou em "Voltar para o Altar".</span></footer>
     </div></div>`;
   }
 
@@ -743,6 +747,12 @@
         <div class="acoes"><button class="btn" data-a="abrirMusicaEspera" data-v="padrao">${I('musica')} ${esc(tituloMusica(M.info.musicaEspera) || 'Sem música')}</button></div>
       </section>
       <section class="caixa">
+        <h2>Letra do versículo na TV</h2>
+        <p class="note">Quanto maior a letra, menos texto cabe: o versículo aparece em mais de uma tela. No celular, a seta ▶ passa a tela e depois o versículo.</p>
+        <div class="escolha">${[['normal', 'Versículo inteiro numa tela'], ['grande', 'Letra grande'], ['enorme', 'Letra muito grande']].map(([v, nome]) =>
+          `<button class="btn ${M.info.letraVersiculo === v ? 'sel' : ''}" data-a="letraVersiculo" data-v="${v}">${nome}</button>`).join('')}</div>
+      </section>
+      <section class="caixa">
         <h2>Monitores</h2>
         <p class="note">${M.info.tv === 'tv' ? 'A TV está ligada.' : 'A TV não foi encontrada. O Telão está numa janela.'}
           ${M.info.telas > 1 ? 'Se a TV e o notebook estiverem trocados, use o botão abaixo.' : ''}</p>
@@ -752,9 +762,9 @@
         <h2>Logo da igreja</h2>
         <p class="note">Aparece no menu do notebook, no celular do pastor e no ícone do app no celular. Use uma imagem PNG com fundo transparente.</p>
         <div class="logo-linha">
-          <div class="logo-amostra">${M.info.logo ? `<img src="/logo.png?v=${encodeURIComponent(M.info.logo)}" alt="Logo atual">` : '<img src="/comum/icone.svg" alt="Cruz do Púlpito">'}</div>
+          <div class="logo-amostra">${M.info.logo ? `<img src="/logo.png?v=${encodeURIComponent(M.info.logo)}" alt="Logo atual">` : '<img src="/comum/icone.svg" alt="Cruz do Altar">'}</div>
           <div class="pilha">
-            <div class="t-grande">${M.info.logo ? 'A logo da igreja está sendo usada.' : 'Sem logo: aparece a cruz do Púlpito.'}</div>
+            <div class="t-grande">${M.info.logo ? 'A logo da igreja está sendo usada.' : 'Sem logo: aparece a cruz do Altar.'}</div>
             <div class="acoes"><button class="btn primary sm" data-a="escolherLogo">${M.info.logo ? 'Trocar logo' : 'Escolher logo'}</button>
               ${M.info.logo ? '<button class="btn sm" data-a="tirarLogo">Tirar logo</button>' : ''}</div>
           </div>
@@ -797,6 +807,7 @@
           <p class="note">O programa toca um som tão baixinho que ninguém ouve, só para o Windows não desligar a saída de som.</p></div>
       </section>
       ${secaoContaTelegram()}
+      ${secaoAtualizacao()}
       <section class="caixa">
         <h2>Vídeos baixados no notebook</h2>
         <p class="note">Os vídeos que você baixa no Telegram do notebook também aparecem no celular, em "Vídeos do Telegram" › "Baixados no notebook".</p>
@@ -805,6 +816,54 @@
           ${o.pastaTelegramExiste ? '' : '<p class="note">Essa pasta ainda não existe. Ela aparece quando você baixar o primeiro vídeo no Telegram.</p>'}
           <div class="acoes"><button class="btn sm" data-a="pastaTelegram">${I('procurar')} Escolher outra pasta</button>
             ${o.pastaTelegramPadrao ? '' : '<button class="btn sm" data-a="opcao" data-v="pastaTelegramPadrao" data-sim="1">Voltar para a pasta normal</button>'}</div></div>
+      </section>`;
+  }
+
+  // Atualização do programa: ele procura sozinho ao abrir; aqui mostra em que pé está.
+  let atu = null;
+  function carregarAtualizacao() {
+    if (!window.notebook?.atualizacao) return;
+    window.notebook.atualizacao().then(e => { atu = e; avisoAtualizacao(); desenhar(); });
+  }
+  carregarAtualizacao();
+  window.notebook?.aoMudarAtualizacao?.(e => {
+    // A porcentagem muda toda hora: só redesenha a página quando muda de fase (não atrapalha quem está digitando).
+    const mudouFase = !atu || atu.fase !== e.fase;
+    atu = e;
+    avisoAtualizacao();
+    if (mudouFase) desenhar(); else { const p = $('atu-pct'); if (p) p.textContent = e.pct + '%'; }
+  });
+  const botaoAtualizar = () => (M.reuniao
+    ? '<p class="note">Tem uma reunião aberta. Encerre a reunião para atualizar, ou deixe: a versão nova entra sozinha quando o programa fechar.</p>'
+    : '<button class="btn primary" data-a="instalarAtualizacao">Atualizar agora</button><p class="note">O programa fecha e abre de novo sozinho, em menos de um minuto. Se preferir, deixe: a versão nova entra quando o programa fechar.</p>');
+  // Aviso na lateral, visível em qualquer aba, quando a versão nova já está baixada.
+  function avisoAtualizacao() {
+    const el = $('aviso-atualizacao');
+    if (!el) return;
+    const html = atu && atu.fase === 'pronta'
+      ? `<div class="atu-lado"><b>Versão nova pronta${atu.nova ? ` (${esc(atu.nova)})` : ''}</b>
+          ${M.reuniao ? '<small>Entra sozinha quando o programa fechar.</small>' : '<button class="btn primary bloco" data-a="instalarAtualizacao">Atualizar agora</button>'}</div>`
+      : '';
+    if (el.innerHTML !== html) el.innerHTML = html;
+  }
+  function secaoAtualizacao() {
+    if (!atu) return '';
+    const quando = atu.quando ? new Date(atu.quando).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+    const procurar = '<div class="acoes"><button class="btn" data-a="buscarAtualizacao">Procurar atualização agora</button></div>';
+    const corpo = {
+      desligada: '<p class="note">A atualização automática vale só no programa instalado pelo instalador (.exe).</p>',
+      parada: `<p class="note">O programa procura versão nova sozinho, logo depois de abrir.</p>${procurar}`,
+      procurando: '<p class="note">Procurando versão nova…</p>',
+      emDia: `<p class="note">Este é o programa mais novo${quando ? ` (conferido em ${quando})` : ''}.</p>${procurar}`,
+      baixando: `<p class="note">Baixando a versão ${esc(atu.nova || 'nova')}: <b id="atu-pct">${atu.pct || 0}%</b>. Pode continuar usando o programa.</p>`,
+      pronta: `<p><b>A versão ${esc(atu.nova || 'nova')} já está baixada.</b></p><div class="acoes">${botaoAtualizar()}</div>`,
+      erro: `<div class="aviso-erro">${I('alerta')} <span>${esc(atu.aviso || 'Não deu para buscar a atualização.')}</span></div>${procurar}`,
+    }[atu.fase] || '';
+    return `<section class="caixa">
+        <h2>Atualização do programa</h2>
+        <div class="campo"><span>Versão instalada: <b>${esc(atu.versao || '')}</b></span>
+          <p class="note">Com internet, o programa procura e baixa a versão nova sozinho. Ela entra quando o programa fechar; nunca no meio de uma reunião.</p>
+          ${corpo}</div>
       </section>`;
   }
 
@@ -823,11 +882,11 @@
     const botao = txt => `<button class="btn primary" type="submit" ${espera}>${tgOcupado ? 'Aguarde…' : txt}</button>`;
     let corpo = '';
     if (tg.etapa === 'semChave') {
-      corpo = `<p class="note">Para o celular mostrar as conversas e os vídeos do Telegram, o Púlpito precisa de uma chave de aplicativo. É grátis e só se faz uma vez:</p>
+      corpo = `<p class="note">Para o celular mostrar as conversas e os vídeos do Telegram, o Altar precisa de uma chave de aplicativo. É grátis e só se faz uma vez:</p>
         <ol class="passos-tg">
           <li>Abra <b>my.telegram.org</b> e entre com o número do Telegram (chega um código no Telegram).</li>
           <li>Clique em <b>API development tools</b>.</li>
-          <li>Preencha <b>App title</b> (ex.: Pulpito Igreja) e <b>Short name</b> (ex.: pulpito). Em Platform escolha <b>Desktop</b> e clique em Create application.</li>
+          <li>Preencha <b>App title</b> (ex.: Altar Igreja) e <b>Short name</b> (ex.: altar). Em Platform escolha <b>Desktop</b> e clique em Create application.</li>
           <li>Copie o <b>App api_id</b> e o <b>App api_hash</b> para os campos abaixo.</li>
         </ol>
         <div class="acoes"><button class="btn sm" type="button" data-a="tgSite">${I('enviar')} Abrir my.telegram.org</button></div>
@@ -853,10 +912,10 @@
           ${erro}<div class="acoes">${botao('Entrar')}<button class="btn sm" type="button" data-a="tgVoltar">Começar de novo</button></div></form>`;
     } else {
       corpo = `<div class="tg-ligado">${I('ok')}<div><b>Telegram ligado${tg.nome ? ': ' + esc(tg.nome) : ''}</b>
-          <p class="note">No celular, em "Vídeos do Telegram", aparecem as conversas que têm vídeo. O Púlpito só lê as conversas e baixa os vídeos escolhidos; não manda mensagens.</p></div></div>
+          <p class="note">No celular, em "Vídeos do Telegram", aparecem as conversas que têm vídeo. O Altar só lê as conversas e baixa os vídeos escolhidos; não manda mensagens.</p></div></div>
         ${erro}
         <div class="acoes"><button class="btn sm danger" type="button" data-a="tgSair">Sair do Telegram</button></div>
-        <p class="note">Também dá para desligar pelo próprio Telegram: Configurações › Dispositivos › "Púlpito (notebook da igreja)".</p>`;
+        <p class="note">Também dá para desligar pelo próprio Telegram: Configurações › Dispositivos › "Altar (notebook da igreja)".</p>`;
     }
     return `<section class="caixa"><h2>Conta do Telegram</h2>${corpo}</section>`;
   }
@@ -878,7 +937,7 @@
     let t = r.qtd ? `${r.qtd} ${r.qtd === 1 ? 'arquivo adicionado' : 'arquivos adicionados'}.` : r.repetidos ? '' : 'Nenhum arquivo adicionado.';
     if (r.repetidos) t += ` ${r.repetidos} ${r.repetidos === 1 ? 'já estava' : 'já estavam'} na Biblioteca e não ${r.repetidos === 1 ? 'foi copiado' : 'foram copiados'} de novo${r.naReuniao ? ` (mas ${r.repetidos === 1 ? 'entrou' : 'entraram'} na reunião)` : ''}.`;
     t = t.trim();
-    if (r.ignorados) t += ` ${r.ignorados} não ${r.ignorados === 1 ? 'é' : 'são'} foto, vídeo nem música e ${r.ignorados === 1 ? 'ficou' : 'ficaram'} de fora.`;
+    if (r.ignorados) t += ` ${r.ignorados} não ${r.ignorados === 1 ? 'é' : 'são'} foto, vídeo, música nem PDF e ${r.ignorados === 1 ? 'ficou' : 'ficaram'} de fora.`;
     avisar(t);
   }
   const reuniaoAberta = () => M.reunioesCompletas.find(x => x.id === S.aberta);
@@ -933,9 +992,10 @@
     novaPregacao: async () => {
       const r = await window.notebook.importarPregacao(S.aba === 'reunioes' ? S.aberta : null);
       if (!r) return;
-      if (!r.qtd) { avisar('Nenhuma imagem escolhida. A pregação precisa de imagens (fotos).'); return; }
+      if (!r.qtd) { avisar('Não deu para criar a pregação. Ela precisa de imagens (fotos) ou de um PDF.'); return; }
       avisar(r.repetida
         ? `Essa pregação já estava na Biblioteca ("${r.titulo}"). Não foi copiada de novo${S.aba === 'reunioes' && S.aberta ? ', mas está na reunião' : ''}.`
+        : r.qtd > 1 ? `${r.qtd} pregações criadas, com ${r.imagens} imagens ao todo.`
         : `Pregação criada com ${r.imagens} imagens. Para mudar o nome, vá na Biblioteca.`);
     },
     daBiblioteca: () => { S.escolher = { aba: 'video', sel: new Set() }; },
@@ -976,6 +1036,8 @@
       S.janelas = null;
     },
     sairJanela: () => enviar({ cmd: 'sairJanela' }),
+    buscarAtualizacao: () => { window.notebook.buscarAtualizacao().then(e => { if (e) { atu = e; desenhar(); } }); },
+    instalarAtualizacao: () => { window.notebook.instalarAtualizacao(); },
     testar: () => { S.testar = 0; },
     abrirVerso: v => {
       const pal = v && reuniaoAberta()?.itens.find(i => i.id === v);
@@ -1015,7 +1077,7 @@
     visao: v => {
       const tipo = S.escolher ? S.escolher.aba : S.bibAba;
       visoes[tipo] = v;
-      try { localStorage.setItem('pulpito-visao', JSON.stringify(visoes)); } catch {}
+      try { localStorage.setItem('altar-visao', JSON.stringify(visoes)); } catch {}
     },
     catFiltro: v => { S.catFiltro = v; S.catForm = null; },
     catNova: () => { S.catForm = { nome: '' }; setTimeout(() => $('cat-nome')?.focus()); },
@@ -1059,12 +1121,13 @@
       const r = await window.notebook.escolherLogo();
       if (r && r.erro) avisar(r.erro); else if (r && r.ok) avisar('Logo colocada.');
     },
-    tirarLogo: async () => { await window.notebook.tirarLogo(); avisar('Logo tirada. Voltou a cruz do Púlpito.'); },
+    tirarLogo: async () => { await window.notebook.tirarLogo(); avisar('Logo tirada. Voltou a cruz do Altar.'); },
     tgSite: () => { window.notebook.tgAcao('site'); return Promise.resolve(); },
     tgVoltar: () => acaoTelegram('voltar'),
     tgSair: () => acaoTelegram('sair'),
     tgEsquecer: () => acaoTelegram('esquecer'),
     pastaTelegram: async () => { if (await window.notebook.escolherPastaTelegram()) { avisar('Pasta do Telegram trocada.'); carregarOpcoes(); } },
+    letraVersiculo: v => window.notebook.mudarOpcao('letraVersiculo', v),
     opcao: async (nome, el) => {
       await window.notebook.mudarOpcao(nome, el.dataset.sim === '1');
       carregarOpcoes();
@@ -1236,7 +1299,7 @@
     if (!destino && S.aba !== 'biblioteca') { S.aba = 'biblioteca'; desenhar(); }
     if (S.aba === 'biblioteca' && S.bibAba === 'pregacao') {
       const r = await window.notebook.importarPregacaoArquivos(ev.dataTransfer.files);
-      avisar(r && r.qtd ? `Pregação criada com ${r.imagens} imagens.` : 'Para criar uma pregação, solte imagens (fotos).');
+      avisar(r && r.qtd ? `Pregação criada com ${r.imagens} imagens.` : 'Para criar uma pregação, solte imagens (fotos) ou o PDF da palestra.');
       return;
     }
     const comoFundo = S.aba === 'biblioteca' && S.bibAba === 'espera' ? 'espera' : (S.aba === 'biblioteca' && S.bibAba === 'fundo') || S.fundo;
