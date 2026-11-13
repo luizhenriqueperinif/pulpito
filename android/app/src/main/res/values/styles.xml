@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Barra de cima azul-marinho (igual ao topo do controle); o resto é a página que vem do notebook. -->
+    <style name="Tema" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">@color/marinho</item>
+        <item name="android:navigationBarColor">#000000</item>
+        <item name="android:windowBackground">@color/papel</item>
+        <item name="android:colorAccent">@color/marinho</item>
+    </style>
+</resources>

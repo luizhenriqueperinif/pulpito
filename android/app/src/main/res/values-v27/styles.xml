@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 8.1 em diante: barra de baixo branca (igual à base do controle), com os botões escuros. -->
+    <style name="Tema" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">@color/marinho</item>
+        <item name="android:navigationBarColor">#FFFFFF</item>
+        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:windowBackground">@color/papel</item>
+        <item name="android:colorAccent">@color/marinho</item>
+    </style>
+</resources>

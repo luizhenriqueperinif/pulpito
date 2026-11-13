@@ -1,0 +1,46 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'br.igreja.altar'
+    compileSdk 36
+
+    defaultConfig {
+        applicationId 'br.igreja.altar'
+        minSdk 24          // Android 7
+        // 34 de propósito: a partir do 35 o Android desenha o app por baixo das barras do sistema,
+        // e a página do controle (servida pelo notebook) não foi feita para isso.
+        targetSdk 34
+        versionCode 1
+        versionName '1.0.0'
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            // O app é distribuído por fora da loja (APK). Por enquanto é assinado com a chave de
+            // desenvolvimento deste computador; uma atualização precisa ser gerada no mesmo computador.
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+}
+
+dependencies {
+    // Leitor de QR code (funciona sem internet e sem os serviços do Google).
+    implementation 'com.journeyapps:zxing-android-embedded:4.3.0'
+    // O leitor usa estas bibliotecas do Android, mas não as traz junto: sem elas o app fecha ao abrir a câmera.
+    implementation platform('org.jetbrains.kotlin:kotlin-bom:1.8.22')   // uma versão só do Kotlin (senão o build acusa classes repetidas)
+    implementation 'androidx.core:core:1.13.1'
+    implementation 'androidx.fragment:fragment:1.6.2'
+}

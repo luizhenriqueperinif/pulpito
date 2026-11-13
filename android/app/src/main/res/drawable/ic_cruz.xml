@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A cruz do ícone do Altar (mesmas proporções de src/web/comum/icone.svg), dentro da área segura do ícone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M49.6,29h8.8v50h-8.8z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M37.1,42.7h33.8v8.4h-33.8z" />
+</vector>

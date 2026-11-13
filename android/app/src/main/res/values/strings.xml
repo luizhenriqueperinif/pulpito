@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_nome">Altar</string>
+    <color name="marinho">#1F2A44</color>
+    <color name="papel">#F7F6F2</color>
+    <color name="vermelho_icone">#D70A10</color>
+</resources>
